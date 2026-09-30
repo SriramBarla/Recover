@@ -4,10 +4,11 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
 import type { Category } from '@recover/shared/dto.ts';
+import { hasContactInfo } from '@recover/shared/unicode.ts';
 import type { PublicMeta } from '@/lib/storage-url.ts';
 import { MapPicker, type MapPin } from './MapPicker.tsx';
 import { apiFetch, needsNewKey, newKey, retryHint, withRetry } from './client-api.ts';
-import { CATEGORY_LABELS } from './format.ts';
+import { CATEGORY_LABELS, CONTACT_INFO_MESSAGE } from './format.ts';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 type Field = 'category' | 'description' | 'lostOn' | 'pin';
@@ -52,7 +53,8 @@ export function LostReportForm({ meta, today }: { meta: PublicMeta; today: strin
     const f = r.error.field;
     const field: Field | undefined =
       f === 'category' || f === 'description' || f === 'lostOn' ? f : f === 'pin' || f === 'mapVersionId' ? 'pin' : undefined;
-    setError({ message: `${r.error.message}${retryHint(r.error)}`, field });
+    const contact = r.error.code === 'invalid_input' && field === 'description' && hasContactInfo(description);
+    setError({ message: contact ? CONTACT_INFO_MESSAGE : `${r.error.message}${retryHint(r.error)}`, field });
   }
 
   const invalid = (f: Field) => (error?.field === f ? true : undefined);
@@ -105,6 +107,7 @@ export function LostReportForm({ meta, today }: { meta: PublicMeta; today: strin
         <p id="lost-desc-count" className="hint">
           {description.length} of 200 characters
         </p>
+        {hasContactInfo(description) && <p className="notice notice-warn">{CONTACT_INFO_MESSAGE}</p>}
       </div>
 
       {meta.map && (

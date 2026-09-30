@@ -88,16 +88,7 @@ export function todayIn(timeZone: string, now: Date = new Date()): string {
   }
 }
 
-// Client-side hint only; the server and the reviewer are the real checks (§13.1 "Contact info in text").
-const CONTACT_PATTERNS = [
-  /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i,
-  /(https?:\/\/|www\.)\S+/i,
-  /\b[a-z0-9-]+\.(com|net|org|io|gg|me|co|us|app|ly|tv)\b/i,
-  /(?:\+?\d[\s().-]*){7,}/,
-  /(^|\s)@[a-z0-9_.]{2,}/i,
-  /\b(snap(chat)?|insta(gram)?|tiktok|discord|whatsapp|text me|call me|dm me)\b/i,
-];
-
-export function looksLikeContactInfo(s: string): boolean {
-  return CONTACT_PATTERNS.some((re) => re.test(s));
-}
+// Shown while typing and when the server rejects contact details at submit (§10.2 layer 1). The check
+// itself is @recover/shared/unicode.ts hasContactInfo, the same function the routes enforce.
+export const CONTACT_INFO_MESSAGE =
+  'Please take out phone numbers, emails, links and usernames. Recover never shares contact details.';

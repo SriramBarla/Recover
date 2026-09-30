@@ -16,7 +16,8 @@ export const GET = handle<Record<string, never>>('GET /api/search-all', async (r
   const meta = await getMeta(params.get('from') ?? '');
   if (!meta.school.flags.crossSchoolSearch) throw new PublicError('feature_disabled');
   const device = getDevice(req, meta.school.id, { create: false });
-  await take(meta.school.code, 'search', device?.digest ?? null, req);
+  // Separate budget for cross-school search (Appendix B.2; rate.ts LIMITS.search_all).
+  await take(meta.school.code, 'search_all', device?.digest ?? null, req);
   const q = cleanText(params.get('q') ?? '', { field: 'q', min: 1, max: 120 });
   const res = await api<{ items: (PublicItemRow & { schoolCode: string })[] }>('api_search_all', {
     p_from_code: meta.school.code,

@@ -98,11 +98,10 @@ test('error signatures carry the route and class only, never the message (G-29)'
   const secret = 'description: my blue hydroflask 555-1212';
   const pg = Object.assign(new Error(secret), { name: 'PostgresError', code: '57014' });
   const sig = errorSignature('POST /api/s/[code]/items', pg);
-  assert.equal(sig, 'POST /api/s/[code]/items:PostgresError:57014');
-  assert.ok(!sig.includes('hydroflask'));
+  assert.equal(sig, 'POST /api/s/[code]/items:PostgresError');
+  assert.ok(!sig.includes('hydroflask') && !sig.includes('555'));
   assert.equal(errorSignature('GET /x', new PublicError('upstream_unavailable')), 'GET /x:upstream_unavailable');
+  assert.equal(errorSignature('GET /x', new PublicError('internal')), 'GET /x:internal');
   assert.equal(errorSignature('GET /x', 'thrown string'), 'GET /x:NonError');
   assert.ok(errorSignature('R'.repeat(200), new Error('x')).length <= 120);
-  const weird = Object.assign(new Error('x'), { code: 'has spaces and data' });
-  assert.equal(errorSignature('GET /x', weird), 'GET /x:Error');
 });

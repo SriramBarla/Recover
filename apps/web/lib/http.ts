@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { after, type NextRequest } from 'next/server';
 import { HIGH_VALUE_CATEGORIES, STUDENT_CATEGORIES, type Category } from '@recover/shared/dto.ts';
 import { PublicError, errorResponse, toPublicError } from '@recover/shared/errors.ts';
+import { errorSignature as sharedSignature, log } from '@recover/shared/log.ts';
 import { api } from './db.ts';
 
 export function requestId(): string {
@@ -33,19 +34,15 @@ export function json(
 
 const SIGNATURE_MAX = 120; // error_rollup.signature check (G-29)
 
-// Route template plus error class: a PublicError code, or the constructor name and a constant error code
-// (SQLSTATE or errno name). Messages are never included because they can echo input.
+// Route template plus error class (log.ts errorSignature). A PublicError is named by its code, so the
+// rollup separates upstream_unavailable from internal. Messages are never included: they can echo input.
 export function errorSignature(route: string, e: unknown): string {
-  let cls = 'NonError';
-  if (e instanceof PublicError) cls = e.code;
-  else if (e instanceof Error) cls = e.name.replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'Error';
-  const code = e !== null && typeof e === 'object' ? (e as { code?: unknown }).code : undefined;
-  if (!(e instanceof PublicError) && typeof code === 'string' && /^[A-Z0-9_]{2,24}$/.test(code)) cls += `:${code}`;
-  return `${route}:${cls}`.slice(0, SIGNATURE_MAX);
+  const named = e instanceof PublicError ? Object.assign(new Error(), { name: e.code }) : e;
+  return sharedSignature(route, named).slice(0, SIGNATURE_MAX);
 }
 
 export function recordError(signature: string, reqId?: string): void {
-  console.error(JSON.stringify({ level: 'error', event: 'request_error', requestId: reqId ?? null, signature }));
+  log('error', 'request_error', { requestId: reqId ?? null, signature });
   try {
     after(async () => {
       try {

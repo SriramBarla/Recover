@@ -3,7 +3,7 @@
 //      server-generated incoming/ keys (§5.1 step 6, §9.2; F-17, F-99, F-102). Guard order: section 9.1.
 import type { Category, DraftCreated, Meta, UploadSpec } from '@recover/shared/dto.ts';
 import { PublicError } from '@recover/shared/errors.ts';
-import { cleanText } from '@recover/shared/unicode.ts';
+import { cleanText, hasContactInfo } from '@recover/shared/unicode.ts';
 import { CACHE, getFeed, getMeta, isFirstUnfilteredPage, type FeedFilters } from '@/lib/cache.ts';
 import { api } from '@/lib/db.ts';
 import { getDevice } from '@/lib/device.ts';
@@ -65,10 +65,13 @@ function parseDraft(b: Record<string, unknown>, meta: Meta): DraftInput {
   // §5.1 step 2: phones, wallets, keys, IDs and medication go straight to the office; no student row.
   if (isHighValue(category)) throw new PublicError('feature_disabled');
   if (!meta.school.enabledCategories.includes(category)) throw new PublicError('invalid_input', 'category');
-  if (typeof b.description !== 'string') throw new PublicError('invalid_input', 'description');
   const description = cleanText(b.description, { field: 'description', min: 2, max: 120 });
   if (b.note !== undefined && b.note !== null && typeof b.note !== 'string') throw new PublicError('invalid_input', 'note');
   const note = typeof b.note === 'string' && b.note.trim() !== '' ? cleanText(b.note, { field: 'note', min: 1, max: 80 }) : null;
+  // §10.2 layer 1: contact info (phone, email, URL, @handle, snap:/ig:) is rejected at submit. Recover
+  // holds no way to reach a student, so this applies to the staff-only note as well as the description.
+  if (hasContactInfo(description)) throw new PublicError('invalid_input', 'description');
+  if (note && hasContactInfo(note)) throw new PublicError('invalid_input', 'note');
   const pin = pinField(b.pin);
   const mapVersionId = pin ? uuidField(b.mapVersionId, 'mapVersionId') : null;
   const dropoffLocationId = uuidField(b.dropoffLocationId, 'dropoffLocationId');

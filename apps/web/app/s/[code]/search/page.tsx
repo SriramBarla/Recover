@@ -35,7 +35,7 @@ export default async function SearchPage({ params, searchParams }: Props) {
   if (raw.trim()) {
     try {
       const digest = await deviceDigest(meta.school.id);
-      await take(code, 'search', digest, { headers: new Headers(await headers()) });
+      await take(code, all ? 'search_all' : 'search', digest, { headers: await headers() });
       const q = cleanText(raw, { field: 'q', min: 1, max: 120 });
       const hmac = searchQueryHmac(q);
       if (all) {

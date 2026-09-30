@@ -7,11 +7,12 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { HIGH_VALUE_CATEGORIES, STUDENT_CATEGORIES, type Category, type Completed, type UploadSpec } from '@recover/shared/dto.ts';
+import { hasContactInfo } from '@recover/shared/unicode.ts';
 import type { PublicMeta } from '@/lib/storage-url.ts';
 import { MapPicker, nearestById, type MapPin } from './MapPicker.tsx';
 import { PhotoSlots } from './PhotoSlots.tsx';
 import { apiFetch, needsNewKey, newKey, reportClientError, retryHint, withRetry, type ApiError } from './client-api.ts';
-import { CATEGORY_LABELS, categoryLabel, formatDateTime, looksLikeContactInfo } from './format.ts';
+import { CATEGORY_LABELS, CONTACT_INFO_MESSAGE, categoryLabel, formatDateTime } from './format.ts';
 import type { Photo } from './photo.ts';
 
 type Step = 'category' | 'highvalue' | 'photos' | 'where' | 'describe' | 'submit' | 'done';
@@ -179,7 +180,9 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
     setProgress('');
     const owner = e.code === 'invalid_input' && e.field ? FIELD_STEP[e.field] : undefined;
     if (owner) {
-      setStepError(e.message);
+      // The server rejects contact details at submit (§10.2); say so instead of the generic field message.
+      const contact = (e.field === 'description' && hasContactInfo(description)) || (e.field === 'note' && hasContactInfo(note));
+      setStepError(contact ? CONTACT_INFO_MESSAGE : e.message);
       setStep(owner);
       return;
     }
@@ -372,6 +375,7 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
               <p id="found-note-hint" className="hint">
                 For example C214, or under the gym bleachers. It is never posted.
               </p>
+              {hasContactInfo(note) && <p className="notice notice-warn">{CONTACT_INFO_MESSAGE}</p>}
             </div>
             {locations.length > 0 ? (
               <div className="field">
@@ -429,12 +433,7 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
                 {description.length} of 120 characters
               </p>
             </div>
-            {looksLikeContactInfo(description) && (
-              <p className="notice notice-warn">
-                This looks like it may include a phone number, email, link or username. Please leave those out, because the
-                description is public.
-              </p>
-            )}
+            {hasContactInfo(description) && <p className="notice notice-warn">{CONTACT_INFO_MESSAGE}</p>}
             <StepNav
               onBack={() => go('where')}
               nextLabel="Post it"

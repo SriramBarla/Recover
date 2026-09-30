@@ -3,7 +3,7 @@
 //      5 open; Idempotency-Key required). Guard order: section 9.1.
 import type { Category, MyLostReport } from '@recover/shared/dto.ts';
 import { PublicError } from '@recover/shared/errors.ts';
-import { cleanText } from '@recover/shared/unicode.ts';
+import { cleanText, hasContactInfo } from '@recover/shared/unicode.ts';
 import { CACHE, getMeta } from '@/lib/cache.ts';
 import { api } from '@/lib/db.ts';
 import { getDevice } from '@/lib/device.ts';
@@ -49,11 +49,13 @@ function lostOnField(v: unknown): string | null {
 
 function parseReport(b: Record<string, unknown>): ReportInput {
   const category = categoryField(b.category);
-  if (typeof b.description !== 'string') throw new PublicError('invalid_input', 'description');
+  const description = cleanText(b.description, { field: 'description', min: 3, max: 200 });
+  // §10.2 layer 1 / §12.1: no contact details; the report is reachable only through this browser.
+  if (hasContactInfo(description)) throw new PublicError('invalid_input', 'description');
   const pin = pinField(b.pin);
   return {
     category,
-    description: cleanText(b.description, { field: 'description', min: 3, max: 200 }),
+    description,
     pin,
     mapVersionId: pin ? uuidField(b.mapVersionId, 'mapVersionId') : null,
     lostOn: lostOnField(b.lostOn),
