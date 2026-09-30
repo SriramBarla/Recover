@@ -20,6 +20,10 @@ export type ConfirmActionProps = {
   name?: string;
   value?: string;
   acknowledge?: ReactNode;
+  // Blocks the confirm button until extra fields in `children` are valid (for example a reason).
+  confirmDisabled?: boolean;
+  // Called when the dialog opens, to reset extra fields.
+  onOpen?: () => void;
   tone?: 'danger' | 'primary';
   triggerVariant?: ButtonVariant;
   triggerSize?: ButtonSize;
@@ -40,6 +44,8 @@ export function ConfirmAction({
   name,
   value,
   acknowledge,
+  confirmDisabled = false,
+  onOpen,
   tone = 'danger',
   triggerVariant,
   triggerSize = 'md',
@@ -62,6 +68,7 @@ export function ConfirmAction({
   function open() {
     setError(null);
     setAcked(false);
+    onOpen?.();
     const d = dialogRef.current;
     if (!d) return;
     if (typeof d.showModal === 'function') d.showModal();
@@ -79,7 +86,7 @@ export function ConfirmAction({
   }
 
   async function confirm() {
-    if (pending || (acknowledge && !acked)) return;
+    if (pending || confirmDisabled || (acknowledge && !acked)) return;
     if (!onConfirm) {
       close();
       return;
@@ -96,7 +103,7 @@ export function ConfirmAction({
     }
   }
 
-  const blocked = Boolean(acknowledge) && !acked;
+  const blocked = confirmDisabled || (Boolean(acknowledge) && !acked);
 
   return (
     <>
