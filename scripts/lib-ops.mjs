@@ -41,7 +41,8 @@ export function parseOpsArgs(argv, options = {}) {
   return { values, positionals: parsed.positionals, apply: values.yes === true && values['dry-run'] !== true };
 }
 
-// Exactly one of the named boolean flags, or none when allowNone (read-only default mode).
+// At most one of the named action options (boolean or valued); none is the read-only default mode
+// unless allowNone is false.
 export function pickAction(values, names, { allowNone = true } = {}) {
   const given = names.filter((n) => values[n] !== undefined && values[n] !== false);
   if (given.length > 1) throw new UsageError(`choose one of ${names.map((n) => `--${n}`).join(', ')}`);

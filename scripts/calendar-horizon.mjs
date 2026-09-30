@@ -168,7 +168,9 @@ export async function run({ values, apply, sql, requestId, say }) {
   const after = horizon(school.today, known);
   const upserts = [...added, ...changed];
   if (!upserts.length) {
-    say(`${school.code}: every row is already in the calendar; horizon ${before.days} days`);
+    say(wanted.length
+      ? `${school.code}: every row is already in the calendar; horizon ${before.days} days`
+      : `${school.code}: all ${past.length} row(s) are before today (${school.today}); nothing to extend`);
     return 0;
   }
   const span = (list) => (list.length ? ` (${list[0].day} .. ${list.at(-1).day})` : '');

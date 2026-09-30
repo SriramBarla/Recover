@@ -77,7 +77,7 @@ export async function run({ values, apply, sql, requestId, say }) {
     const p = planNext(state);
     printPlan(say, [
       `create Vault secret ${p.name} (32 random bytes, base64url)`,
-      `set ${CURRENT} = ${p.current} and ${PREVIOUS} = ${label(p.previous)}${p.previous ? ' (both versions verify)' : ' (the revoked version stays revoked)'}`,
+      `set ${CURRENT} = ${p.current} and ${PREVIOUS} = ${label(p.previous)}${p.previous ? ' (both versions verify)' : ' (no older version verifies)'}`,
       `write STAFF_ASSERTION_KEY_CURRENT and STAFF_ASSERTION_KEY_VERSION=${p.next} to ${out} (mode 600, new file)`,
       `write audit_log runbook.rotate_assertion_key (request_id ${requestId})`,
     ]);

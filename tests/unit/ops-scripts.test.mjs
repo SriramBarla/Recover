@@ -182,6 +182,11 @@ test('orphan classification covers every class, and missing objects are found', 
   assert.equal(c('incoming', `${S}/${I}/${Q}/raw`, 'garbage'), 'too_new');
   const listed = new Set([`${S}/${I}/${P}/t0k3n/thumb.jpg`]);
   assert.deepEqual(missingObjects('variants', listed, index), [{ bucket: 'variants', photoId: P, column: 'medium_path', status: 'public_ready' }]);
+  const deleting = buildIndex(
+    [{ id: P, item_id: I, school_id: S, status: 'public_ready', original_path: `${S}/${I}/${P}/canonical.jpg` }],
+    [{ object_kind: 'original', storage_path: `${S}/${I}/${P}/canonical.jpg` }],
+  );
+  assert.deepEqual(missingObjects('originals', new Set(), deleting), [], 'an object already in the deletion ledger is not missing');
   assert.equal(displayKey('variants', `${S}/${I}/${P}/t0k3n/thumb.jpg`, false), `${S}/${I}/${P}/<token>/thumb.jpg`);
   assert.equal(displayKey('variants', `${S}/${I}/${P}/t0k3n/thumb.jpg`, true), `${S}/${I}/${P}/t0k3n/thumb.jpg`);
   assert.equal(displayKey('originals', `${S}/${I}/${P}/canonical.jpg`, false), `${S}/${I}/${P}/canonical.jpg`);

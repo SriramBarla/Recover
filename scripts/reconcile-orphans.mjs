@@ -163,9 +163,12 @@ export function classify(bucket, object, index, { now = Date.now(), minAgeMs = 2
   return 'unreferenced';
 }
 
+// Referenced keys with no object; keys already in the unverified deletion ledger are expected to go.
 export function missingObjects(bucket, listedKeys, index) {
   const out = [];
-  for (const [key, ref] of index.refs[bucket]) if (!listedKeys.has(key)) out.push({ bucket, ...ref });
+  for (const [key, ref] of index.refs[bucket]) {
+    if (!listedKeys.has(key) && !index.pendingKeys[bucket].has(key)) out.push({ bucket, ...ref });
+  }
   return out;
 }
 
