@@ -125,6 +125,61 @@ export function queueOf(v: unknown): QueuePage {
   return { items, nextCursor: createdAt && id ? { createdAt, id } : null };
 }
 
+// ---------- custody lists ----------
+
+// One row on the custody page, from either a StaffItemRow (proposed api_staff_custody_list) or a
+// public feed row (fallback). locationId is the drop-off location while with the finder and the
+// current location once checked in.
+export type CustodyRow = {
+  id: string;
+  publicId: string | null;
+  category: string;
+  description: string | null;
+  custody: string;
+  locationId: string | null;
+  postedAt: string | null;
+  receivedAt: string | null;
+  deadlineAt: string | null;
+  expiresAt: string | null;
+  dispositionDueAt: string | null;
+  rowVersion: number;
+  thumb: string | null;
+  reviewStatus: string | null;
+};
+
+export function custodyRowFromStaff(i: StaffItemRow, code: string): CustodyRow {
+  const photo = i.photos
+    .filter((p) => p.isCurrent && (p.status === 'canonical_ready' || p.status === 'public_ready'))
+    .sort((a, b) => a.position - b.position)[0];
+  return {
+    id: i.id,
+    publicId: i.publicId,
+    category: i.category,
+    description: i.description,
+    custody: i.custody,
+    locationId: i.custody === 'at_location' ? i.currentLocationId : i.dropoffLocationId,
+    postedAt: i.createdAt,
+    receivedAt: null,
+    deadlineAt: i.arrivalDeadlineAt,
+    expiresAt: i.expiresAt,
+    dispositionDueAt: i.dispositionDueAt,
+    rowVersion: i.rowVersion,
+    thumb: photo ? `/api/staff/${code}/items/${i.id}/photos/${photo.photoId}` : null,
+    reviewStatus: i.reviewStatus,
+  };
+}
+
+export type CustodyLists = { expected: CustodyRow[]; atLocation: CustodyRow[]; dispositionDue: CustodyRow[] | null };
+
+export function custodyListsOf(v: unknown, code: string): CustodyLists {
+  const rows = (key: string) =>
+    list(obj(v)?.[key])
+      .map(itemOf)
+      .filter((i): i is StaffItemRow => i !== null)
+      .map((i) => custodyRowFromStaff(i, code));
+  return { expected: rows('expected'), atLocation: rows('atLocation'), dispositionDue: rows('dispositionDue') };
+}
+
 // ---------- roster ----------
 
 export type RosterMember = {

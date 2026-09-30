@@ -179,6 +179,9 @@ export const FNS = {
   api_staff_calendar_upsert: { op: 'calendar.write', scope: 'school', target: [] },
   api_staff_stats: { op: 'stats.read', scope: 'school', target: [] },
   api_staff_audit: { op: 'audit.read', scope: 'school', target: [] },
+  // PROPOSED, not in contract 6.2: custody lists for /staff/[code]/custody (expected arrivals,
+  // at location, disposition due). The page falls back to the public feed until it exists.
+  api_staff_custody_list: { op: 'item.read', scope: 'school', target: [] },
   api_district_schools_list: { op: 'district.schools.read', scope: 'district', target: [] },
   api_district_school_create: { op: 'district.school.create', scope: 'district', target: [] },
   api_district_settings_get: { op: 'district.settings.read', scope: 'district', target: [] },

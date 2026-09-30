@@ -428,6 +428,11 @@ export const schoolMeta = cache(async (code: string): Promise<StaffMeta | null> 
   };
 });
 
+// Postgres undefined_function: lets a page fall back while a proposed function is not deployed.
+export function isUndefinedFunction(e: unknown): boolean {
+  return (e as { code?: unknown } | null)?.code === '42883';
+}
+
 export function newRequestId(): string {
   return randomUUID();
 }
