@@ -96,7 +96,8 @@ The whole v1 app is merged and runs end to end on the local stack. Deployment ne
 | Browser E2E (Playwright) | #19 | 22/22 against the running stack |
 | Integration | #21 | end-to-end 15/15, from student post to verified deletion |
 | Design system | #23, #24 | E2E 22/22; 320 px reflow; named links |
-| Security reviews: web/worker, database, ops | #25, #26, #27 | `security_review.sql` (32 checks); 311 unit tests; 9/9 SQL suites |
+| Security reviews: web/worker, database, ops | #25, #26, #27, #30, #31 | `security_review.sql` (32 checks); production builds with 0 warnings |
+| Device-key rotation window | #32 | `device_rekey.sql` (47 checks); 322 unit tests; 10/10 SQL suites |
 | Design polish pass | `feat/design-polish` | in progress |
 
 **Local performance check** (production build, 200 concurrent readers for 30 s): p95 was feed 3 ms, search 8 ms, listing 2 ms, meta 155 ms, with 0 errors. The staging run of `scripts/load.mjs` is still to do.
