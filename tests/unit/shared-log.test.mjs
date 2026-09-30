@@ -96,6 +96,10 @@ test('a synthetic request carrying every forbidden field logs none of them', () 
     'x-forwarded-for': S('x_forwarded_for'),
     remoteAddress: S('remoteAddress'),
     ipv6: S('ipv6'),
+    IPv6: S('IPv6'),
+    clientIPv6: S('clientIPv6'),
+    ipAddresses: [S('ipAddresses')],
+    emailAddresses: [S('emailAddresses')],
     q: S('q'),
     query: S('query'),
     searchQuery: S('searchQuery'),
@@ -126,6 +130,20 @@ test('a synthetic request carrying every forbidden field logs none of them', () 
   for (const k of ['description', 'DESCRIPTION', 'note', 'body', 'authorization', 'cookie', 'token', 'password', 'secret', 'digest', 'email', 'ip', 'q', 'query', 'path', 'X-Amz-Date', 'pin']) {
     assert.equal(obj[k], '[scrubbed]', k);
   }
+});
+
+test('short denylist words match whole words only, so near-miss keys survive', () => {
+  const fields = { pinned: true, spinner: 'spin', notebookCount: 2, antibody: 'a', equipment: 'e', quality: 'good', requestId: 'r' };
+  const { obj } = logLine('info', 'e', fields);
+  for (const [k, v] of Object.entries(fields)) assert.deepEqual(obj[k], v, k);
+});
+
+test('a __proto__ key is logged as a plain, scrubbed key', () => {
+  const fields = JSON.parse('{"__proto__": {"description": "SENTINEL_proto_7c1e", "n": 1}, "a": 1}');
+  const { text, obj } = logLine('info', 'e', fields);
+  assert.ok(!text.includes('SENTINEL_proto_7c1e'));
+  assert.equal(obj.a, 1);
+  assert.equal(Object.getPrototypeOf({}).description, undefined, 'no prototype pollution');
 });
 
 test('route paths survive under path-like keys; private storage paths do not', () => {

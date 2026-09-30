@@ -7,12 +7,14 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 const SCRUBBED = '[scrubbed]';
 const MAX_DEPTH = 8;
 
-// A key is scrubbed when any of its words (camelCase, snake_case, kebab-case, dotted; a trailing
-// plural `s` ignored) is listed here, or when it starts with x-amz- / x_amz_.
-const DENY = new Set([
-  'description', 'note', 'body', 'bodies', 'authorization', 'cookie', 'token', 'password', 'secret',
-  'digest', 'email', 'ip', 'ipv4', 'ipv6', 'address', 'addr', 'forwarded', 'q', 'query', 'queries', 'pin',
-]);
+// A key is scrubbed when it starts with x-amz- / x_amz_, contains one of the long denylist words
+// anywhere (case-insensitive), or has one of the short denylist words as a whole word (camelCase,
+// snake_case, kebab-case, dotted; a trailing plural `s` ignored). Short words stay whole-word so
+// `description` does not match `ip` and `spinner` does not match `pin`.
+const DENY_SUBSTRINGS = [
+  'description', 'authorization', 'cookie', 'token', 'password', 'secret', 'digest', 'email', 'address', 'ipv4', 'ipv6',
+];
+const DENY_WORDS = new Set(['note', 'body', 'bodies', 'ip', 'addr', 'forwarded', 'q', 'query', 'queries', 'pin']);
 // Path-like keys keep only route paths (a string starting with `/`); storage keys, URLs, and anything
 // else under them is scrubbed.
 const PATHLIKE = new Set(['path', 'url', 'uri', 'href']);
@@ -27,10 +29,12 @@ function words(key: string): string[] {
 }
 
 function deniedKey(key: string, value: unknown): boolean {
-  if (/^x[-_]amz[-_]/i.test(key)) return true; // x-amz-* headers and presign parameters
+  const lower = key.toLowerCase();
+  if (/^x[-_]amz[-_]/.test(lower)) return true; // x-amz-* headers and presign parameters
+  if (DENY_SUBSTRINGS.some((s) => lower.includes(s))) return true;
   const ws = words(key);
-  if (ws.some((w) => DENY.has(w) || DENY.has(w.replace(/s$/, '')))) return true;
-  const pathlike = key.toLowerCase() === 'key' || ws.some((w) => PATHLIKE.has(w) || PATHLIKE.has(w.replace(/s$/, '')));
+  if (ws.some((w) => DENY_WORDS.has(w) || DENY_WORDS.has(w.replace(/s$/, '')))) return true;
+  const pathlike = lower === 'key' || ws.some((w) => PATHLIKE.has(w) || PATHLIKE.has(w.replace(/s$/, '')));
   return pathlike && !(typeof value === 'string' && value.startsWith('/'));
 }
 
@@ -61,7 +65,7 @@ function scrub(v: unknown, depth: number, stack: WeakSet<object>): unknown {
   if (Array.isArray(v)) {
     out = v.map((x) => scrub(x, depth + 1, stack));
   } else {
-    const o: Record<string, unknown> = {};
+    const o: Record<string, unknown> = Object.create(null); // a `__proto__` key stays a plain key
     for (const [k, x] of Object.entries(v)) o[k] = deniedKey(k, x) ? SCRUBBED : scrub(x, depth + 1, stack);
     out = o;
   }
