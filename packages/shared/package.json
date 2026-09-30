@@ -1,0 +1,7 @@
+{
+  "name": "@recover/shared",
+  "private": true,
+  "type": "module",
+  "exports": { "./*": "./src/*" },
+  "dependencies": { "postgres": "3.4.9" }
+}

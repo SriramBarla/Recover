@@ -1,0 +1,22 @@
+{
+  "name": "recover",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "test": "node --test \"tests/unit/**/*.test.mjs\"",
+    "test:sql": "node scripts/sql-tests.mjs",
+    "test:int": "node --test --test-concurrency=1 \"tests/integration/**/*.test.mjs\"",
+    "typecheck": "tsc -p packages/shared/tsconfig.json && tsc -p apps/web/tsconfig.json && tsc -p apps/worker/tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "6.0.3"
+  }
+}
