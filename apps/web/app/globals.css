@@ -748,6 +748,10 @@ details[open] > summary .school-switcher-chevron {
 .filter-panel[open] > .filter-bar {
   margin-top: 0.75rem;
 }
+/* Closed means gone: Chrome hides details content with content-visibility, which still reports boxes. */
+.filter-panel:not([open]) > :not(summary) {
+  display: none;
+}
 
 /* ========================================================================
    8. Page header and sub navigation
@@ -1738,6 +1742,42 @@ button.chip-sm {
 }
 .steps li[data-state='current'] {
   background: linear-gradient(90deg, var(--brand) 0 50%, var(--track) 50% 100%);
+}
+
+/* Wizard footer: Back on the left, the big next step on the right (it wraps above Back on phones). */
+.wizard-nav {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.wizard-nav > :last-child {
+  margin-left: auto;
+}
+/* A public item ID to say at the office: big, monospace, and easy to copy down. */
+.id-callout {
+  padding: 1rem 1.25rem;
+  border: 2px dashed var(--brand);
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  text-align: center;
+}
+.id-callout-label {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-strong);
+}
+.id-callout-value {
+  margin: 0.2rem 0 0.3rem;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
 }
 
 /* ========================================================================

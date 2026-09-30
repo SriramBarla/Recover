@@ -34,6 +34,8 @@ export type PhotoCaptureProps = {
   // 'environment' opens the rear camera on phones; false lets people pick from their library.
   capture?: 'environment' | 'user' | false;
   accept?: string;
+  // false when the page announces results itself (for example after an async resize).
+  announce?: boolean;
   id?: string;
   className?: string;
 };
@@ -84,6 +86,7 @@ export function PhotoCapture({
   disabled = false,
   capture = 'environment',
   accept = 'image/*',
+  announce = true,
   id,
   className,
 }: PhotoCaptureProps) {
@@ -240,9 +243,11 @@ export function PhotoCapture({
         tabIndex={-1}
         onChange={(e) => onFiles(e.target.files)}
       />
-      <div className="visually-hidden" aria-live="polite" aria-atomic="true">
-        {message}
-      </div>
+      {announce ? (
+        <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+          {message}
+        </div>
+      ) : null}
     </fieldset>
   );
 }
