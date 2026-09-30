@@ -1,6 +1,6 @@
 // A dev-only switch (RECOVER_DEV_LOGIN, RECOVER_DEV_AUTH) set in a production build is treated as off by
-// env.ts; this says so once, naming the variables only, never their values. instrumentation.ts calls it
-// on the Node.js runtime only.
+// env.ts; this says so once, naming the variables only, never their values. instrumentation.ts calls both
+// reports on the Node.js runtime only.
 import { log } from '@recover/shared/log.ts';
 import { deviceKeyReport, ignoredDevFlags } from './env.ts';
 
