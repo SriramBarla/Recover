@@ -13,7 +13,8 @@ const ITEMS = [
 ];
 
 export default async function DistrictLayout({ children }: LayoutProps<'/district'>) {
-  const r = await resolveStaff();
+  // Chrome only: a failed lookup renders the header without nav; the page reports the error.
+  const r = await resolveStaff().catch(() => null);
   const ok = r !== null && isDistrictAdmin(r);
   return (
     <>

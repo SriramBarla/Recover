@@ -9,7 +9,8 @@ import { getStaffContext, schoolMemberships } from '@/lib/staff.ts';
 
 export default async function SchoolLayout({ children, params }: LayoutProps<'/staff/[code]'>) {
   const { code } = await params;
-  const ctx = await getStaffContext(code);
+  // Chrome only: a failed lookup renders the header without nav; the page reports the error.
+  const ctx = await getStaffContext(code).catch(() => null);
   const items = ctx ? pagesFor(ctx.role).map((p) => ({ href: `/staff/${code}/${p.seg}`, label: p.label })) : [];
   const multi = ctx ? ctx.isDistrict || schoolMemberships(ctx).length > 1 : false;
   const who = ctx ? `${ctx.user.displayName ?? ctx.user.email} (${ROLE_LABELS[ctx.role]})` : null;
