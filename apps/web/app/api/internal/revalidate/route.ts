@@ -34,8 +34,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     return invalid('tags');
   }
   const unique = [...new Set(tags as string[])];
-  // [VERIFY] V-4: Next 16 signature is revalidateTag(tag, profile); 'max' marks the tag stale so the
-  // next request revalidates it (stale-while-revalidate).
-  for (const tag of unique) revalidateTag(tag, 'max');
+  // Next 16: revalidateTag(tag, profile). Invalidations here follow claims, pulls, deletions and
+  // publication, which are deletion- and privacy-sensitive, so expire immediately ({ expire: 0 })
+  // rather than serving one more stale response ('max' is stale-while-revalidate).
+  for (const tag of unique) revalidateTag(tag, { expire: 0 });
   return reply(200, { revalidated: unique }, rid);
 }

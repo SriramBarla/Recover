@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RejectReason, StaffItemRow } from '@recover/shared/dto.ts';
 import type { StaffMeta } from '../../lib/staff.ts';
@@ -75,6 +75,31 @@ export function ItemActions({ code, item, can, meta }: Props) {
   const held = item.flags.includes('hold');
   const photos = item.photos.filter((p) => p.isCurrent && p.status !== 'deleted').sort((a, b) => a.position - b.position);
 
+  // Review shortcuts, matching the queue board (§5.3): A approve, E approve with edits, R reject.
+  // Ignored while typing or with modifier keys; every shortcut also has a visible button (WCAG 2.1.4).
+  const reviewable = can.approve && pending;
+  useEffect(() => {
+    if (!reviewable) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || busy || panel) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const k = e.key.toLowerCase();
+      if (k === 'a') {
+        e.preventDefault();
+        void safely(() => act(`${base}/approve`, { rowVersion: rv, edits: null }, 'Approved.'));
+      } else if (k === 'e') {
+        e.preventDefault();
+        setPanel('approve-edit');
+      } else if (k === 'r') {
+        e.preventDefault();
+        setPanel('reject');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   const sections: ReactElement[] = [];
 
   if (can.approve && pending) {
@@ -82,13 +107,13 @@ export function ItemActions({ code, item, can, meta }: Props) {
       <section key="review" className="stack" aria-labelledby="act-review">
         <h3 id="act-review">Review</h3>
         <div className="row">
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void safely(() => act(`${base}/approve`, { rowVersion: rv, edits: null }, 'Approved.'))}>
+          <button type="button" className="btn btn-primary" aria-keyshortcuts="A" disabled={busy} onClick={() => void safely(() => act(`${base}/approve`, { rowVersion: rv, edits: null }, 'Approved.'))}>
             Approve
           </button>
-          <button type="button" className="btn" disabled={busy} onClick={() => setPanel('approve-edit')}>
+          <button type="button" className="btn" aria-keyshortcuts="E" disabled={busy} onClick={() => setPanel('approve-edit')}>
             Approve with edits
           </button>
-          <button type="button" className="btn btn-danger" disabled={busy} onClick={() => setPanel('reject')}>
+          <button type="button" className="btn btn-danger" aria-keyshortcuts="R" disabled={busy} onClick={() => setPanel('reject')}>
             Reject
           </button>
         </div>
