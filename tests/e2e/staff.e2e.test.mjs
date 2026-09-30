@@ -181,6 +181,16 @@ describe('staff app in a browser', { skip }, () => {
 
   it('the office user receives, then claims, the item on the custody page with confirmation steps', T, async (t) => {
     if (!state.item) return t.skip('no item to take through custody');
+    if (h && state.item.itemId) {
+      // Approval sets publication_status = 'generating', and each worker step of the publish pipeline bumps
+      // the item's row_version. A custody action from a page loaded mid-pipeline is then a 409 by design (the
+      // staff assertion binds row_version), so the office user starts once publishing has finished.
+      await eventually(async () => (await dbState(state.item))?.publication_status !== 'generating', {
+        timeout: 90_000,
+        interval: 2_000,
+        message: 'the approved item never finished publishing',
+      });
+    }
     await withBrowser(t, async ({ page }) => {
       await devSignIn(page, OFFICE);
       const res = await open(page, CUSTODY);

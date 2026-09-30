@@ -5,10 +5,13 @@
 // - Writes apps/web/.env.local, apps/worker/.env.local and the root .env.local (dev scheduler secrets).
 // - Upserts the staff-assertion key and version pointers into the local Vault so the web mint side
 //   and the SQL verifier agree (§14.2). Run it again after every `supabase db reset`.
+// - Clears the web's on-disk data cache: a reset restarts public ids, and a cached listing for an id from
+//   before the reset would be served once more (unstable_cache serves stale, then refreshes). Start
+//   `npm run dev` afterwards, since a running server also holds cache entries in memory.
 // Prints variable NAMES only, never values.
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -143,3 +146,8 @@ console.log(`dev-env: wrote apps/web/.env.local (${names(web)})`);
 console.log(`dev-env: wrote apps/worker/.env.local (${names(worker)})`);
 console.log(`dev-env: wrote .env.local (${names(rootEnv)})`);
 console.log(`dev-env: Vault staff_assertion_key_v${version} + current/previous pointers upserted`);
+
+for (const dir of ['apps/web/.next/dev/cache/fetch-cache', 'apps/web/.next/cache/fetch-cache']) {
+  rmSync(path.join(root, dir), { recursive: true, force: true });
+}
+console.log('dev-env: cleared the web data cache (restart npm run dev if it is running)');
