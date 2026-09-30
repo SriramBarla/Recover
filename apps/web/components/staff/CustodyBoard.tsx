@@ -2,6 +2,14 @@
 
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { CategoryIcon } from '@/components/ui/category.tsx';
+import { IconBuilding, IconCalendar, IconCheck, IconClock, IconTransfer } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
+import { StatusBadge } from '@/components/ui/status-badge.tsx';
+import { Table } from '@/components/ui/table.tsx';
 import { ActionError } from './ActionError.tsx';
 import { ApiError, staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
@@ -87,16 +95,21 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
       <a href={`/staff/${code}/items/${r.id}`} className="mono">
         {r.publicId ?? 'Item'}
       </a>
-      <div className="small">{categoryLabel(r.category)}</div>
+      <div className="small with-icon">
+        <CategoryIcon category={r.category} size={16} />
+        {categoryLabel(r.category)}
+      </div>
     </td>
   );
 
   const thumbCell = (r: CustodyRow) => (
     <td style={{ width: '4.5rem' }}>
       {r.thumb ? (
-        <img src={r.thumb} alt="" width={64} height={64} loading="lazy" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} />
+        <img className="thumb-sm" src={r.thumb} alt="" width={64} height={64} loading="lazy" />
       ) : (
-        <span className="muted small">No photo</span>
+        <span className="thumb-sm thumb-sm-empty" aria-hidden="true">
+          <CategoryIcon category={r.category} size={24} />
+        </span>
       )}
     </td>
   );
@@ -106,26 +119,26 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
       <p className="visually-hidden" role="status" aria-live="polite">
         {live}
       </p>
-      {live ? <div className="notice notice-ok">{live}</div> : null}
-      <label className="field" style={{ maxWidth: '20rem' }}>
-        <span className="label">Show location</span>
-        <select className="select" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="">All locations</option>
-          {locations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {live ? <Notice tone="success">{live}</Notice> : null}
+      <Select
+        id="custody-filter"
+        label="Show location"
+        fieldClassName="inline-field"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="All locations"
+        options={locations.map((l) => ({ value: l.id, label: l.name }))}
+      />
 
       <section className="stack" aria-labelledby="c-expected">
-        <h2 id="c-expected">Expected arrivals ({expected.length})</h2>
+        <h2 id="c-expected" className="with-icon">
+          <IconClock />
+          Expected arrivals ({expected.length})
+        </h2>
         {expected.length === 0 ? (
           <p className="muted">No items are on their way.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
+          <Table caption="Expected arrivals" hideCaption>
               <thead>
                 <tr>
                   <th scope="col">Photo</th>
@@ -141,18 +154,19 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
                   <ExpectedRow key={r.id} row={r} locations={locations} can={can.receive} busy={busy.has(r.id)} error={errors[r.id]} tz={tz} thumbCell={thumbCell(r)} idCell={idCell(r)} locName={locName} onReceive={(locationId) => void run(r, 'receive', { locationId }, 'Checked in')} />
                 ))}
               </tbody>
-            </table>
-          </div>
+          </Table>
         )}
       </section>
 
       <section className="stack" aria-labelledby="c-at">
-        <h2 id="c-at">At a location ({atLocation.length})</h2>
+        <h2 id="c-at" className="with-icon">
+          <IconBuilding />
+          At a location ({atLocation.length})
+        </h2>
         {atLocation.length === 0 ? (
           <p className="muted">Nothing is checked in.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
+          <Table caption="At a location" hideCaption>
               <thead>
                 <tr>
                   <th scope="col">Photo</th>
@@ -169,11 +183,11 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
                     {idCell(r)}
                     <td>{r.description ?? <span className="muted">None</span>}</td>
                     <td>
-                      {locName(r.locationId)}
+                      <StatusBadge kind="custody" status="at_location" label={locName(r.locationId)} />
                       {r.receivedAt ? <div className="small muted">since {fmtDate(r.receivedAt, tz)}</div> : null}
                       {r.expiresAt ? <div className="small muted">retention ends {fmtDate(r.expiresAt, tz)}</div> : null}
                     </td>
-                    <td className="stack">
+                    <td className="stack-sm">
                       {can.transfer ? <TransferControl row={r} locations={locations} busy={busy.has(r.id)} onTransfer={(locationId) => void run(r, 'transfer', { locationId }, 'Transferred')} /> : null}
                       <div className="row" style={{ alignItems: 'flex-start' }}>
                         {can.claim ? (
@@ -191,16 +205,18 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </Table>
         )}
       </section>
 
       <section className="stack" aria-labelledby="c-due">
-        <h2 id="c-due">Disposition due{due ? ` (${due.length})` : ''}</h2>
+        <h2 id="c-due" className="with-icon">
+          <IconCalendar />
+          Disposition due{due ? ` (${due.length})` : ''}
+        </h2>
         <p className="hint">Retention has ended for these items. Time alone never disposes of anything: record what physically happened.</p>
         {due === null ? (
-          <div className="notice notice-warn">This list needs the staff custody list from the database, which is not available yet. Open an item to record its disposition.</div>
+          <Notice tone="warning">This list needs the staff custody list from the database, which is not available yet. Open an item to record its disposition.</Notice>
         ) : due.length === 0 ? (
           <p className="muted">Nothing is due.</p>
         ) : (
@@ -208,10 +224,13 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
             {can.bulkDispose ? (
               <div className="card stack">
                 <div className="spread">
-                  <strong>{selected.size} selected</strong>
-                  <button type="button" className="btn btn-ghost" onClick={() => setSelected(selected.size === due.length ? new Set() : new Set(due.slice(0, 50).map((r) => r.id)))}>
+                  <strong className="with-icon">
+                    <IconCheck />
+                    {selected.size} selected
+                  </strong>
+                  <Button variant="ghost" onClick={() => setSelected(selected.size === due.length ? new Set() : new Set(due.slice(0, 50).map((r) => r.id)))}>
                     {selected.size === due.length ? 'Unselect all' : 'Select all (max 50)'}
-                  </button>
+                  </Button>
                 </div>
                 <ConfirmButton
                   label={`Record ${selected.size} selected`}
@@ -221,20 +240,19 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
                   disabled={selected.size === 0}
                   onConfirm={bulkDispose}
                 >
-                  <fieldset className="row" style={{ border: 0, padding: 0, margin: 0 }}>
-                    <legend className="label">What happened to all of them</legend>
+                  <fieldset className="fieldset">
+                    <legend>What happened to all of them</legend>
                     {DISPOSITIONS.map((d) => (
-                      <label key={d} className="row small">
+                      <label key={d} className="choice">
                         <input type="radio" name="bulk-disposition" value={d} checked={bulkDisposition === d} onChange={() => setBulkDisposition(d)} />
-                        {d === 'donated' ? 'Donated' : 'Disposed of'}
+                        <span>{d === 'donated' ? 'Donated' : 'Disposed of'}</span>
                       </label>
                     ))}
                   </fieldset>
                 </ConfirmButton>
               </div>
             ) : null}
-            <div className="table-wrap">
-              <table className="table">
+            <Table caption="Disposition due" hideCaption>
                 <thead>
                   <tr>
                     {can.bulkDispose ? <th scope="col">Select</th> : null}
@@ -257,12 +275,13 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
                       {idCell(r)}
                       <td>{locName(r.locationId)}</td>
                       <td>{fmtDateTime(r.dispositionDueAt, tz)}</td>
-                      <td>{label(CUSTODY_LABELS, r.custody)}</td>
+                      <td>
+                        <StatusBadge kind="custody" status={r.custody} label={label(CUSTODY_LABELS, r.custody)} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </Table>
           </>
         )}
       </section>
@@ -306,24 +325,28 @@ function ExpectedRow({
       <td>{fmtDate(row.postedAt, tz)}</td>
       <td>
         {row.deadlineAt ? fmtDateTime(row.deadlineAt, tz) : <span className="muted">Not set</span>}
-        {late ? <div className="badge badge-warn">Late: missed the deadline</div> : null}
+        {late ? (
+          <div>
+            <Badge tone="warn" icon={<IconClock />}>
+              Late: missed the deadline
+            </Badge>
+          </div>
+        ) : null}
       </td>
       <td>
         {can ? (
-          <div className="stack">
-            <label className="field">
-              <span className="visually-hidden">Check in at</span>
-              <select className="select" value={at} onChange={(e) => setAt(e.target.value)}>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="button" className="btn btn-primary" disabled={busy || !at} onClick={() => onReceive(at)}>
+          <div className="stack-sm">
+            <Select
+              id={`checkin-${row.id}`}
+              label="Check in at"
+              hideLabel
+              value={at}
+              onChange={(e) => setAt(e.target.value)}
+              options={locations.map((l) => ({ value: l.id, label: l.name }))}
+            />
+            <Button variant="primary" disabled={busy || !at} onClick={() => onReceive(at)} icon={<IconCheck />}>
               {late ? 'Late check-in' : 'Check in'}
-            </button>
+            </Button>
             <ActionError error={error} />
           </div>
         ) : (
@@ -339,20 +362,18 @@ function TransferControl({ row, locations, busy, onTransfer }: { row: CustodyRow
   const [to, setTo] = useState(others[0]?.id ?? '');
   if (others.length === 0) return null;
   return (
-    <div className="row">
-      <label className="field">
-        <span className="visually-hidden">Move to</span>
-        <select className="select" value={to} onChange={(e) => setTo(e.target.value)}>
-          {others.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="btn" disabled={busy || !to} onClick={() => onTransfer(to)}>
+    <div className="row" style={{ flexWrap: 'nowrap' }}>
+      <Select
+        id={`move-${row.id}`}
+        label="Move to"
+        hideLabel
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        options={others.map((l) => ({ value: l.id, label: l.name }))}
+      />
+      <Button disabled={busy || !to} onClick={() => onTransfer(to)} icon={<IconTransfer />}>
         Move
-      </button>
+      </Button>
     </div>
   );
 }
@@ -362,12 +383,12 @@ function DisposeControl({ onConfirm }: { onConfirm: (disposition: (typeof DISPOS
   const [d, setD] = useState<(typeof DISPOSITIONS)[number]>('donated');
   return (
     <ConfirmButton label="Donate or dispose" prompt="Record that this item physically left the lost and found?" confirmLabel="Record it" danger onConfirm={() => onConfirm(d)}>
-      <fieldset className="row" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">What happened</legend>
+      <fieldset className="fieldset">
+        <legend>What happened</legend>
         {DISPOSITIONS.map((x) => (
-          <label key={x} className="row small">
+          <label key={x} className="choice">
             <input type="radio" name={name} value={x} checked={d === x} onChange={() => setD(x)} />
-            {x === 'donated' ? 'Donated' : 'Disposed of'}
+            <span>{x === 'donated' ? 'Donated' : 'Disposed of'}</span>
           </label>
         ))}
       </fieldset>

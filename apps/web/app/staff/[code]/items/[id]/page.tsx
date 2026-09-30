@@ -2,18 +2,17 @@
 // role and state allow (§5.3-5.4, Appendix C).
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import type { ReactNode } from 'react';
 import type { StaffItemRow } from '@recover/shared/dto.ts';
+import { Badge, type Tone } from '@/components/ui/badge.tsx';
+import { CategoryIcon } from '@/components/ui/category.tsx';
+import { PrivateNote } from '@/components/ui/field.tsx';
+import { IconAlert, IconArrowRight, IconCalendar, IconCheck, IconClock, IconImage, IconList } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
+import { FlagChip, StatusBadge } from '@/components/ui/status-badge.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
-import {
-  CUSTODY_LABELS,
-  PUBLICATION_LABELS,
-  REVIEW_LABELS,
-  badgeClass,
-  categoryLabel,
-  chipsFor,
-  fmtDateTime,
-  label,
-} from '@/components/staff/format.ts';
+import { CUSTODY_LABELS, PUBLICATION_LABELS, REVIEW_LABELS, categoryLabel, chipsFor, fmtDateTime, label } from '@/components/staff/format.ts';
 import { ItemActions, type ItemCan } from '@/components/staff/ItemActions.tsx';
 import { ItemPhotos } from '@/components/staff/ItemPhotos.tsx';
 import { ItemPin } from '@/components/staff/ItemPin.tsx';
@@ -54,8 +53,9 @@ function timeline(item: StaffItemRow): Step[] {
   return steps;
 }
 
-const STEP_BADGE: Record<Step['state'], string> = { done: 'badge badge-ok', current: 'badge badge-brand', upcoming: 'badge', missed: 'badge badge-danger' };
+const STEP_TONE: Record<Step['state'], Tone> = { done: 'ok', current: 'brand', upcoming: 'neutral', missed: 'danger' };
 const STEP_TEXT: Record<Step['state'], string> = { done: 'Done', current: 'Now', upcoming: 'Later', missed: 'Missed' };
+const STEP_ICON: Record<Step['state'], ReactNode> = { done: <IconCheck />, current: <IconArrowRight />, upcoming: <IconClock />, missed: <IconAlert /> };
 
 function locationName(meta: StaffMeta | null, id: string | null): string {
   if (!id) return 'None';
@@ -74,9 +74,8 @@ export default async function ItemPage({ params }: PageProps<'/staff/[code]/item
   if (!loaded.ok) {
     return (
       <>
-        <h1>Item</h1>
+        <PageHeader title="Item" back={{ href: `/staff/${code}/queue`, label: 'Back to the queue' }} />
         <ErrorNotice code={loaded.code} what="Item" signinHref={signinPath(path)} />
-        <a href={`/staff/${code}/queue`}>Back to the queue</a>
       </>
     );
   }
@@ -97,86 +96,92 @@ export default async function ItemPage({ params }: PageProps<'/staff/[code]/item
     block: canPerform(role, 'device.block'),
   };
   const tz = meta?.timezone ?? null;
-  const chips = chipsFor(item.flags, item.screeningStatus);
+  const flags = chipsFor(item.flags, item.screeningStatus).map((c) => c.key);
   const title = `${categoryLabel(item.category)} ${item.publicId ?? ''}`.trim();
 
   return (
     <>
-      <div className="stack">
-        <a href={`/staff/${code}/queue`} className="small">
-          Back to the queue
-        </a>
-        <h1>
-          {categoryLabel(item.category)} <span className="mono muted" style={{ fontSize: '1rem' }}>{item.publicId ?? 'No public id yet'}</span>
-        </h1>
+      <PageHeader
+        back={{ href: `/staff/${code}/queue`, label: 'Back to the queue' }}
+        title={
+          <span className="review-card-title" style={{ fontSize: 'inherit' }}>
+            <CategoryIcon category={item.category} size={28} />
+            {categoryLabel(item.category)} <span className="mono muted" style={{ fontSize: '1rem' }}>{item.publicId ?? 'No public id yet'}</span>
+          </span>
+        }
+      >
         <ul className="chips" aria-label="Item state" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          <li className="badge badge-brand">Review: {label(REVIEW_LABELS, item.reviewStatus)}</li>
-          <li className="badge">Listing: {label(PUBLICATION_LABELS, item.publicationStatus)}</li>
-          <li className="badge">Custody: {label(CUSTODY_LABELS, item.custody)}</li>
-          {chips.map((c) => (
-            <li key={c.key} className={badgeClass(c.tone)}>
-              {c.label}
+          <li>
+            <StatusBadge kind="review" status={item.reviewStatus} label={label(REVIEW_LABELS, item.reviewStatus)} context />
+          </li>
+          <li>
+            <StatusBadge kind="publication" status={item.publicationStatus} label={label(PUBLICATION_LABELS, item.publicationStatus)} context />
+          </li>
+          <li>
+            <StatusBadge kind="custody" status={item.custody} label={label(CUSTODY_LABELS, item.custody)} context />
+          </li>
+          {flags.map((f) => (
+            <li key={f}>
+              <FlagChip flag={f} />
             </li>
           ))}
         </ul>
-      </div>
+      </PageHeader>
       {item.quarantine ? (
-        <div className="notice notice-danger" role="alert">
-          <strong>Quarantined by automated screening.</strong>{' '}
+        <Notice tone="danger" live="assertive" title="Quarantined by automated screening.">
           {atLeast(role, 'school_admin') ? 'Do not download or share it. Follow the district incident contact tree before acting.' : 'Ask a school admin.'}
-        </div>
+        </Notice>
       ) : null}
       <div className="grid-wide">
         <section className="card stack" aria-labelledby="item-photos">
-          <h2 id="item-photos">Photos</h2>
+          <h2 id="item-photos" className="with-icon">
+            <IconImage />
+            Photos
+          </h2>
           <ItemPhotos code={code} item={item} blurred={item.quarantine} />
         </section>
         <section className="card stack" aria-labelledby="item-details">
-          <h2 id="item-details">Details</h2>
-          <dl className="stack small" style={{ margin: 0 }}>
-            <div>
-              <dt className="label">Description (public once published)</dt>
-              <dd style={{ margin: 0 }}>{item.description ?? <span className="muted">Cleared</span>}</dd>
-            </div>
-            <div>
-              <dt className="label">Finder's location note (staff only)</dt>
-              <dd style={{ margin: 0 }}>{item.note ?? <span className="muted">None</span>}</dd>
-            </div>
-            <div>
-              <dt className="label">Exact pin (staff only)</dt>
-              <dd style={{ margin: 0 }}>
-                <ItemPin code={code} pin={item.pin} mapVersionId={item.mapVersionId} activeMap={meta?.map ?? null} canReadMaps={canPerform(role, 'map.read')} label={title} />
-              </dd>
-            </div>
-            <div>
-              <dt className="label">Public zone</dt>
-              <dd style={{ margin: 0 }}>{item.zoneName ?? <span className="muted">None</span>}</dd>
-            </div>
-            <div>
-              <dt className="label">Drop-off location</dt>
-              <dd style={{ margin: 0 }}>{locationName(meta, item.dropoffLocationId)}</dd>
-            </div>
-            <div>
-              <dt className="label">Current location</dt>
-              <dd style={{ margin: 0 }}>{locationName(meta, item.currentLocationId)}</dd>
-            </div>
-            <div>
-              <dt className="label">Device rejections, last 30 days</dt>
-              <dd style={{ margin: 0 }}>{item.deviceRejections30d === null ? <span className="muted">Not applicable</span> : item.deviceRejections30d}</dd>
-            </div>
+          <h2 id="item-details" className="with-icon">
+            <IconList />
+            Details
+          </h2>
+          <dl className="kv kv-stacked small">
+            <dt>Description (public once published)</dt>
+            <dd>{item.description ?? <span className="muted">Cleared</span>}</dd>
+            <dt>
+              Finder's location note <PrivateNote>Staff only</PrivateNote>
+            </dt>
+            <dd>{item.note ?? <span className="muted">None</span>}</dd>
+            <dt>
+              Exact pin <PrivateNote>Staff only</PrivateNote>
+            </dt>
+            <dd>
+              <ItemPin code={code} pin={item.pin} mapVersionId={item.mapVersionId} activeMap={meta?.map ?? null} canReadMaps={canPerform(role, 'map.read')} label={title} />
+            </dd>
+            <dt>Public zone</dt>
+            <dd>{item.zoneName ?? <span className="muted">None</span>}</dd>
+            <dt>Drop-off location</dt>
+            <dd>{locationName(meta, item.dropoffLocationId)}</dd>
+            <dt>Current location</dt>
+            <dd>{locationName(meta, item.currentLocationId)}</dd>
+            <dt>Device rejections, last 30 days</dt>
+            <dd>{item.deviceRejections30d === null ? <span className="muted">Not applicable</span> : item.deviceRejections30d}</dd>
           </dl>
         </section>
       </div>
       <section className="card stack" aria-labelledby="item-timeline">
-        <h2 id="item-timeline">Custody timeline</h2>
-        <ol className="stack" style={{ paddingLeft: '1.25rem', margin: 0 }}>
+        <h2 id="item-timeline" className="with-icon">
+          <IconCalendar />
+          Custody timeline
+        </h2>
+        <ol className="timeline">
           {timeline(item).map((s) => (
             <li key={s.key}>
-              <span className="row">
-                <span className={STEP_BADGE[s.state]}>{STEP_TEXT[s.state]}</span>
-                <span>{s.label}</span>
-                {s.at ? <span className="muted small">{fmtDateTime(s.at, tz)}</span> : null}
-              </span>
+              <Badge tone={STEP_TONE[s.state]} icon={STEP_ICON[s.state]}>
+                {STEP_TEXT[s.state]}
+              </Badge>
+              <span>{s.label}</span>
+              {s.at ? <span className="muted small">{fmtDateTime(s.at, tz)}</span> : null}
             </li>
           ))}
         </ol>

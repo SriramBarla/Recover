@@ -428,7 +428,7 @@ samp {
   grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
 }
 /* List resets at zero specificity, so layout helpers such as .stack still space these lists. */
-:where(.item-grid, .item-list, .tile-grid, ul.photo-slots) {
+:where(.item-grid, .item-list, .tile-grid, ul.photo-slots, ul.grid, ul.grid-wide) {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -510,6 +510,19 @@ dd,
 }
 .topbar-nav {
   min-width: 0;
+}
+.topbar-user {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+@media (max-width: 40rem) {
+  .topbar-user {
+    display: none;
+  }
 }
 @media (max-width: 47.99rem) {
   .topbar-nav {
@@ -1771,6 +1784,87 @@ button.chip-sm {
   gap: 0.5rem;
   aspect-ratio: 4 / 3;
   color: var(--muted);
+}
+/* Staff review cards (queue and item page). */
+.review-card[data-focused='true'] {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), var(--shadow);
+}
+.review-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  font-size: 1.125rem;
+}
+.review-card-title svg {
+  color: var(--brand);
+}
+.review-actions {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.review-panel {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.review-panel-danger {
+  border-color: transparent;
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+}
+.photo-slot.review-photo {
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.inline-field {
+  min-width: min(14rem, 100%);
+  max-width: 24rem;
+}
+/* 64px table thumbnails (custody, staff lists). */
+.thumb-sm {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.item-actions > section + section {
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.timeline {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.timeline li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+}
+.bulk-bar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+  box-shadow: var(--shadow-lg);
+}
+.pin-details > summary {
+  width: fit-content;
+  min-height: 1.75rem;
+  color: var(--brand);
+  font-weight: 600;
+  cursor: pointer;
 }
 /* A public item ID to say at the office: big, monospace, and easy to copy down. */
 .id-callout {

@@ -1,30 +1,59 @@
 import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button.tsx';
+import { IconLogOut } from '@/components/ui/icons.tsx';
+import { SchoolSwitcher, type SchoolOption } from '@/components/ui/school-switcher.tsx';
+import { TopNav, type NavItem } from '@/components/ui/top-nav.tsx';
 import { signOutAction } from './actions.ts';
 
-type Props = { brandHref: string; context?: string | null; nav?: ReactNode; userLabel?: string | null; links?: ReactNode };
+export type TopBarContext = {
+  label?: string;
+  name: string;
+  code?: string | null;
+  // Other schools this person can switch to; with allHref the context becomes a menu.
+  schools?: SchoolOption[];
+  allHref?: string;
+};
 
-// Staff and district header: brand, current school or area, section nav, user, and sign out.
-export function TopBar({ brandHref, context, nav, userLabel, links }: Props) {
+type Props = {
+  brandHref: string;
+  // What the person is acting on (a school, or the district): always the most visible thing here.
+  context?: TopBarContext | null;
+  items?: NavItem[];
+  navLabel?: string;
+  userLabel?: string | null;
+  links?: ReactNode;
+};
+
+// Staff and district header: brand, the school or area being acted on, section nav (aria-current),
+// the signed-in user, and sign out. Dense (.compact) like the rest of the staff app.
+export function TopBar({ brandHref, context, items, navLabel, userLabel, links }: Props) {
   return (
-    <header className="topbar">
-      <div className="container" style={{ flexWrap: 'wrap' }}>
-        <div className="row">
-          <a className="brand" href={brandHref}>
-            Recover
-          </a>
-          {context ? <span className="badge badge-brand">{context}</span> : null}
-        </div>
-        {nav}
-        <div className="row small">
+    <TopNav
+      className="compact"
+      homeHref={brandHref}
+      context={
+        context ? (
+          <SchoolSwitcher
+            current={{ code: context.code, name: context.name }}
+            label={context.label}
+            schools={context.schools}
+            allHref={context.allHref}
+          />
+        ) : null
+      }
+      items={items}
+      navLabel={navLabel}
+      end={
+        <>
           {links}
-          {userLabel ? <span className="muted">{userLabel}</span> : null}
+          {userLabel ? <span className="topbar-user">{userLabel}</span> : null}
           <form action={signOutAction}>
-            <button type="submit" className="btn btn-ghost">
+            <Button type="submit" variant="ghost" size="sm" icon={<IconLogOut />}>
               Sign out
-            </button>
+            </Button>
           </form>
-        </div>
-      </div>
-    </header>
+        </>
+      }
+    />
   );
 }

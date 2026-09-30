@@ -1,6 +1,7 @@
 // /staff/[code]/queue: pending items, flagged first (§5.3; §10.2-10.4; G-40). Quarantined items are
 // returned by SQL only to school_admin and above (G-24).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { QueueBoard } from '@/components/staff/QueueBoard.tsx';
 import { queueOf } from '@/components/staff/shapes.ts';
@@ -23,10 +24,10 @@ export default async function QueuePage({ params }: PageProps<'/staff/[code]/que
 
   return (
     <>
-      <div className="stack">
-        <h1>Review queue</h1>
-        <p className="muted">Nothing a student posts is visible until you approve it. Screening only flags photos for a closer look; you make the call.</p>
-      </div>
+      <PageHeader
+        title="Review queue"
+        description="Nothing a student posts is visible until you approve it. Screening only flags photos for a closer look; you make the call."
+      />
       {queue.ok ? (
         <QueueBoard
           key={nowMs}

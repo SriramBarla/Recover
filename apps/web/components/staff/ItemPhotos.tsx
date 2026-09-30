@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import type { StaffItemRow } from '@recover/shared/dto.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { IconAlert, IconClock, IconEye } from '@/components/ui/icons.tsx';
 
 const VIEWABLE = new Set(['canonical_ready', 'public_ready']);
 
@@ -14,19 +17,25 @@ export function ItemPhotos({ code, item, blurred = false }: { code: string; item
   if (photos.length === 0) return <p className="muted small">No photos.</p>;
   const label = item.publicId ?? 'this item';
   return (
-    <div className="stack">
-      <div className="photo-slots" style={{ gridTemplateColumns: `repeat(${Math.min(3, photos.length)}, 1fr)` }}>
+    <div className="stack-sm">
+      <div className="photo-slots review-photos" style={{ gridTemplateColumns: `repeat(${Math.min(3, photos.length)}, minmax(0, 1fr))` }}>
         {photos.map((p) => {
           const src = `/api/staff/${code}/items/${item.id}/photos/${p.photoId}`;
           if (!VIEWABLE.has(p.status)) {
             return (
-              <div key={p.photoId} className="photo-slot" style={{ borderStyle: 'solid', aspectRatio: '4 / 3' }}>
-                <span className={p.status === 'failed' ? 'badge badge-danger' : 'badge'}>{p.status === 'failed' ? 'Photo failed' : 'Processing photo'}</span>
+              <div key={p.photoId} className="photo-slot review-photo">
+                {p.status === 'failed' ? (
+                  <Badge tone="danger" icon={<IconAlert />}>
+                    Photo failed
+                  </Badge>
+                ) : (
+                  <Badge icon={<IconClock />}>Processing photo</Badge>
+                )}
               </div>
             );
           }
           return (
-            <a key={p.photoId} href={reveal ? `${src}?full=1` : undefined} target="_blank" rel="noopener" className="photo-slot" style={{ borderStyle: 'solid', aspectRatio: '4 / 3', background: 'var(--surface-2)' }}>
+            <a key={p.photoId} href={reveal ? `${src}?full=1` : undefined} target="_blank" rel="noopener" className="photo-slot review-photo">
               <img
                 src={src}
                 alt={`Photo ${p.position + 1} of ${label}`}
@@ -39,9 +48,9 @@ export function ItemPhotos({ code, item, blurred = false }: { code: string; item
         })}
       </div>
       {!reveal ? (
-        <button type="button" className="btn" onClick={() => setReveal(true)}>
+        <Button onClick={() => setReveal(true)} icon={<IconEye />}>
           Show photos
-        </button>
+        </Button>
       ) : (
         <span className="hint">Select a photo to open it full size in a new tab.</span>
       )}

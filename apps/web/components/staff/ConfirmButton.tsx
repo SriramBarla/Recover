@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { ConfirmAction } from '@/components/ui/confirm-action.tsx';
 import { ActionError } from './ActionError.tsx';
 
 type Props = {
@@ -14,62 +15,23 @@ type Props = {
   confirmDisabled?: boolean;
 };
 
-// Two-step button: every destructive action shows an explicit confirm step first.
+// Two-step button: every destructive action shows an explicit confirm step first, as a modal dialog
+// (design system ConfirmAction): focus starts on Cancel, Escape backs out, and a failed action keeps
+// the dialog open with the error, including "Sign in again" when a step-up sign-in is needed.
 export function ConfirmButton({ label, prompt, confirmLabel = 'Confirm', danger = false, disabled, onConfirm, children, confirmDisabled }: Props) {
-  const [stage, setStage] = useState<'idle' | 'confirm' | 'busy'>('idle');
-  const [error, setError] = useState<unknown>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (stage === 'confirm' && !children) confirmRef.current?.focus();
-  }, [stage, children]);
-
-  if (stage === 'idle') {
-    return (
-      <span className="stack" style={{ display: 'inline-block' }}>
-        <button
-          type="button"
-          className={danger ? 'btn btn-danger' : 'btn'}
-          disabled={disabled}
-          onClick={() => {
-            setError(null);
-            setStage('confirm');
-          }}
-        >
-          {label}
-        </button>
-        <ActionError error={error} />
-      </span>
-    );
-  }
-
   return (
-    <div className="notice notice-warn stack" role="group" aria-label={prompt}>
-      <p style={{ margin: 0, fontWeight: 600 }}>{prompt}</p>
+    <ConfirmAction
+      label={label}
+      title={prompt}
+      confirmLabel={confirmLabel}
+      tone={danger ? 'danger' : 'primary'}
+      triggerVariant={danger ? 'danger-outline' : 'secondary'}
+      disabled={disabled}
+      confirmDisabled={confirmDisabled}
+      onConfirm={onConfirm}
+      renderError={(e) => <ActionError error={e} />}
+    >
       {children}
-      <div className="row">
-        <button
-          ref={confirmRef}
-          type="button"
-          className={danger ? 'btn btn-danger' : 'btn btn-primary'}
-          disabled={stage === 'busy' || confirmDisabled}
-          onClick={async () => {
-            setStage('busy');
-            try {
-              await onConfirm();
-              setStage('idle');
-            } catch (e) {
-              setError(e);
-              setStage('idle');
-            }
-          }}
-        >
-          {stage === 'busy' ? 'Working...' : confirmLabel}
-        </button>
-        <button type="button" className="btn btn-ghost" disabled={stage === 'busy'} onClick={() => setStage('idle')}>
-          Cancel
-        </button>
-      </div>
-    </div>
+    </ConfirmAction>
   );
 }
