@@ -66,7 +66,8 @@ export function handle<P extends Record<string, string>>(route: string, fn: Hand
     const reply: Reply = { requestId: requestId() };
     let res: Response;
     try {
-      res = await fn(req, await context.params, reply);
+      const params = ((await context?.params) ?? {}) as P; // static routes may receive no params
+      res = await fn(req, params, reply);
     } catch (e) {
       const pe = toPublicError(e);
       if (pe.status >= 500) recordError(errorSignature(route, e), reply.requestId);
