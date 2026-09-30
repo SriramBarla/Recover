@@ -1,4 +1,6 @@
 // Feed/search thumbnail card. No hooks, so both Server Components and the client "Load more" list use it.
+// The card body is a div, not an <article>: Chrome computes no accessible name for a link that wraps
+// an article landmark, so screen readers heard an unnamed link (found by tests/e2e a11y).
 // Links do not prefetch: a grid of 30 listings must not become 30 origin renders during dismissal peaks.
 import Link from 'next/link';
 import type { PublicItem } from '@recover/shared/dto.ts';
@@ -22,7 +24,7 @@ export function ItemCard({
   const photo = item.photos[0];
   return (
     <Link href={href} prefetch={false} className="card-link">
-      <article className="card item-card">
+      <div className="card item-card">
         {photo ? (
           <img
             className="thumb"
@@ -44,7 +46,7 @@ export function ItemCard({
           </p>
           <p className="small">{extra ?? custodyLine(item.custody, locationName)}</p>
         </div>
-      </article>
+      </div>
     </Link>
   );
 }
