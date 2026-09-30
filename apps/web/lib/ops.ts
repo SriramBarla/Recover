@@ -5,6 +5,7 @@
 import { mint } from '@recover/shared/assertion.ts';
 import { sha256Hex } from '@recover/shared/crypto.ts';
 import { PublicError } from '@recover/shared/errors.ts';
+import { cleanText, hasContactInfo } from '@recover/shared/unicode.ts';
 import type { AssertionBundle, StaffRole } from '@recover/shared/dto.ts';
 import { ALL_CATEGORIES } from '../components/staff/constants.ts';
 
@@ -398,20 +399,24 @@ export function domainAllowed(email: string, domains: readonly string[]): boolea
 
 // ---------- request validation (route handlers) ----------
 
-// Rejects C0/C1 controls and bidi overrides; NFC; collapses whitespace (mirrors unicode.ts cleanText).
-const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/;
+// Rejects C0/C1 controls and bidi overrides (used for small non-text fields such as emails).
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/;
 
+// Free text through the shared Unicode policy (F-102): NFC, controls and bidi refused, whitespace
+// collapsed, length in code points. Optional fields map empty input to null.
 export function textOf(v: unknown, field: string, opts: { min?: number; max: number; optional?: boolean }): string | null {
-  if (v === undefined || v === null || v === '') {
+  if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {
     if (opts.optional) return null;
     throw new PublicError('invalid_input', field);
   }
-  if (typeof v !== 'string') throw new PublicError('invalid_input', field);
-  const s = v.normalize('NFC').replace(/\s+/g, ' ').trim();
-  if (CONTROL_RE.test(s)) throw new PublicError('invalid_input', field);
-  const len = [...s].length;
-  if (len === 0 && opts.optional) return null;
-  if (len < (opts.min ?? 1) || len > opts.max) throw new PublicError('invalid_input', field);
+  return cleanText(v, { field, min: opts.min ?? 1, max: opts.max });
+}
+
+// The one public free-text field (contract section 0): 2..120 code points and no contact details
+// (§10.2 layer 1 applies to staff-written text too).
+export function publicDescriptionOf(v: unknown): string {
+  const s = cleanText(v, { field: 'description', min: 2, max: 120 });
+  if (hasContactInfo(s)) throw new PublicError('invalid_input', 'description');
   return s;
 }
 
@@ -524,7 +529,7 @@ export function editsOf(v: unknown): Record<string, unknown> | null {
   for (const key of Object.keys(v)) {
     if (!(EDIT_KEYS as readonly string[]).includes(key)) throw new PublicError('invalid_input', key);
   }
-  if ('description' in v) out.description = textOf(v.description, 'description', { min: 2, max: 120 });
+  if ('description' in v) out.description = publicDescriptionOf(v.description);
   if ('category' in v) out.category = enumOf(v.category, 'category', ALL_CATEGORIES);
   if ('zoneId' in v) out.zoneId = uuidOrNull(v.zoneId, 'zoneId');
   if ('dropoffLocationId' in v) out.dropoffLocationId = uuidOf(v.dropoffLocationId, 'dropoffLocationId');

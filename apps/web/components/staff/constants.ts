@@ -12,7 +12,8 @@ export const REJECT_REASONS: readonly RejectReason[] = ['inappropriate', 'not_an
 // Reason codes rather than free text, so no free text can reach audit rows (contract section 0).
 export const PULL_REASONS = ['pii_visible', 'inappropriate', 'not_an_item', 'duplicate', 'owner_request', 'other'] as const;
 export const DELETE_REASONS = ['staff_mistake', 'duplicate', 'test_post', 'other'] as const;
-export const BLOCK_REASONS = ['spam', 'inappropriate', 'abuse', 'other'] as const;
+// Matches the devices.block_reason CHECK (auto_rejections is system-only).
+export const BLOCK_REASONS = ['spam', 'abuse', 'staff', 'other'] as const;
 export const MAP_REJECT_REASONS = ['safety_review', 'image_quality', 'zones', 'locations', 'other'] as const;
 export const DISPOSITIONS = ['donated', 'disposed'] as const;
 export const ASSIGNABLE_ROLES = ['reviewer', 'office', 'school_admin'] as const; // never district_admin (§5.5)

@@ -8,6 +8,7 @@ import { notFound, redirect, unstable_rethrow } from 'next/navigation';
 import type { NextRequest } from 'next/server';
 import type { Category, Meta, StaffRole } from '@recover/shared/dto.ts';
 import { PublicError, errorBody, errorResponse, toPublicError, type PublicErrorCode } from '@recover/shared/errors.ts';
+import { errorSignature, log } from '@recover/shared/log.ts';
 import { membershipsOf, schoolsOf, type SchoolRef } from '../components/staff/shapes.ts';
 import { api } from './db.ts';
 import { optionalEnv, requireEnv, storagePublicUrl } from './env.ts';
@@ -261,17 +262,11 @@ export async function apiDistrict(): Promise<StaffAuth> {
   return s;
 }
 
-function errClass(e: unknown): string {
-  const name = e instanceof Error ? e.name : typeof e;
-  const pg = (e as { code?: unknown } | null)?.code;
-  return typeof pg === 'string' && /^[0-9A-Z]{5}$/.test(pg) ? `${name}:${pg}` : name;
-}
-
-// Scrubbed error signature only: never the message, which may quote arguments.
+// Scrubbed error class and SQLSTATE only (shared log.ts denylist); never the message, which may
+// quote arguments. The signature also feeds error_rollup (G-29).
 export function logUnexpected(where: string, e: unknown): void {
-  const cls = errClass(e);
-  console.error(JSON.stringify({ level: 'error', event: 'staff_error', where, err: cls }));
-  api('api_record_error', { p_signature: `web:${where}:${cls}`.slice(0, 120) }).catch(() => {});
+  log('error', 'staff_error', { route: where, err: e });
+  api('api_record_error', { p_signature: errorSignature(where, e) }).catch(() => {});
 }
 
 function jsonResponse(data: unknown, status: number, rid: string): Response {

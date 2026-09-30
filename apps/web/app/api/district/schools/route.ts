@@ -18,7 +18,7 @@ export const POST = handler<Record<string, never>>('district.schools.create', as
   const s = await apiDistrict();
   const data = await districtCall(s, 'api_district_school_create', {
     p_code: code,
-    p_name: textOf(body.name, 'name', { min: 2, max: 80 }),
+    p_name: textOf(body.name, 'name', { min: 2, max: 120 }),
     p_timezone: timezone,
     p_admin_email: emailOf(body.adminEmail, 'adminEmail'),
     p_admin_name: textOf(body.adminName, 'adminName', { max: 80, optional: true }),

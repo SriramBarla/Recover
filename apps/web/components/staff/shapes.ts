@@ -272,7 +272,9 @@ export type MapVersionRow = {
   width: number | null;
   height: number | null;
   createdAt: string | null;
+  submittedAt: string | null;
   approvedAt: string | null;
+  rejectedReason: string | null;
   hasImage: boolean | null;
   zones: ZoneRow[];
 };
@@ -291,7 +293,9 @@ export function mapVersionsOf(v: unknown): MapVersionRow[] {
       width,
       height: num(pick(o, 'height', 'heightPx')),
       createdAt: str(o.createdAt),
+      submittedAt: str(o.submittedAt),
       approvedAt: str(o.approvedAt),
+      rejectedReason: str(o.rejectedReason),
       hasImage: bool(pick(o, 'hasImage', 'hasDraft', 'draftUploaded')) ?? (width !== null ? true : null),
       zones: zonesOf(o.zones),
     });

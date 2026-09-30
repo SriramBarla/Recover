@@ -83,8 +83,8 @@ export const DELETE_REASON_LABELS: Record<string, string> = {
 
 export const BLOCK_REASON_LABELS: Record<string, string> = {
   spam: 'Spam',
-  inappropriate: 'Inappropriate content',
-  abuse: 'Abuse',
+  abuse: 'Abuse or harassment',
+  staff: 'Staff decision',
   other: 'Other',
 };
 

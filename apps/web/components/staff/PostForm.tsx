@@ -113,8 +113,8 @@ export function PostForm({ code, mode, meta }: Props) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!pending && (!category || description.trim().length < 2 || !locationId)) {
-      setError(new ApiError('invalid_input', 'Choose a category and location, and describe the item (at least 2 characters).', 400));
+    if (!pending && (!category || description.trim().length < 2 || !locationId || files.length === 0)) {
+      setError(new ApiError('invalid_input', 'Choose a category and location, describe the item (at least 2 characters), and add at least one photo.', 400));
       return;
     }
     try {
@@ -232,7 +232,7 @@ export function PostForm({ code, mode, meta }: Props) {
               ))}
             </select>
             {highValue ? (
-              <span className="hint">High-value or sensitive item: prefer no public photo and generic text (for example "black phone"). Keep proof-of-ownership details out.</span>
+              <span className="hint">High-value or sensitive item: use a plain photo and generic text (for example "black phone"). Keep serial numbers, names, and other proof-of-ownership details out of view.</span>
             ) : null}
           </label>
           <label className="field">
@@ -259,7 +259,7 @@ export function PostForm({ code, mode, meta }: Props) {
           </label>
 
           <div className="stack">
-            <span className="label">Photos (up to 3)</span>
+            <span className="label">Photos (1 to 3)</span>
             <div className="photo-slots">
               {[0, 1, 2].map((i) => {
                 const f = files[i];

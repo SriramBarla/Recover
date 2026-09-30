@@ -3,7 +3,7 @@
 // 2. The worker broker returns presigned PUTs for the declared photo slots (same broker as students).
 // The browser then PUTs the photos and calls items/[id]/complete.
 import type { UploadSpec } from '@recover/shared/dto.ts';
-import { ALL_CATEGORIES, POST_MODES, coordStr, enumOf, intOf, textOf, uuidOf, uuidOrNull } from '@/lib/ops.ts';
+import { ALL_CATEGORIES, POST_MODES, coordStr, enumOf, intOf, publicDescriptionOf, textOf, uuidOf, uuidOrNull } from '@/lib/ops.ts';
 import { apiSchool, handler, idempotencyKeyOf, mutation, ok, schoolCall } from '@/lib/staff.ts';
 import { workerJson } from '@/lib/worker.ts';
 
@@ -20,13 +20,13 @@ export const POST = handler<{ code: string }>('staff.items.create', async (req, 
       p_school_code: ctx.code,
       p_mode: enumOf(body.mode ?? 'staff', 'mode', POST_MODES),
       p_category: enumOf(body.category, 'category', ALL_CATEGORIES),
-      p_description: textOf(body.description, 'description', { min: 2, max: 120 }),
+      p_description: publicDescriptionOf(body.description),
       p_note: textOf(body.note, 'note', { max: 80, optional: true }),
       p_map_version_id: hasPin ? uuidOf(body.mapVersionId, 'mapVersionId') : uuidOrNull(body.mapVersionId, 'mapVersionId'),
       p_pin_x: hasPin ? coordStr(body.pinX, 'pinX') : null,
       p_pin_y: hasPin ? coordStr(body.pinY, 'pinY') : null,
       p_location_id: uuidOf(body.locationId, 'locationId'),
-      p_photo_count: intOf(body.photoCount, 'photoCount', 0, 3),
+      p_photo_count: intOf(body.photoCount, 'photoCount', 1, 3), // items.photo_count CHECK 1..3
     },
     { idempotencyKey: idempotencyKeyOf(req) },
   );
