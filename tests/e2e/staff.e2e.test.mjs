@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { OTHER_SCHOOL, SCHOOL, TIMEOUTS, WORKER_DOWN, stackStatus, warm, withBrowser } from '../../playwright.config.mjs';
-import { NO_HARNESS, createPendingItem, itemState, jpegPhoto, loadHarness, uniqueText } from './lib/data.mjs';
+import { NO_HARNESS, createPendingItem, itemIdFor, itemState, jpegPhoto, loadHarness, shared, uniqueText } from './lib/data.mjs';
 import { confirmStep, devLoginAvailable, devSignIn, scopeFor, shortcutFor } from './lib/staff.mjs';
 import { esc, eventually, isShown, open, postFoundItem, settle, shown, textboxNamed } from './lib/ui.mjs';
 
@@ -73,9 +73,15 @@ describe('staff app in a browser', { skip }, () => {
 
   it('the queue lists a pending student item', T, async (t) => {
     if (!state.reviewer) return t.skip('the reviewer did not sign in');
-    if (!status.workerUp) return t.skip(WORKER_DOWN);
     const description = uniqueText('e2e staff queue bottle');
-    if (h) {
+    if (shared.studentItem) {
+      // Run in one process with the student suite: review the item its wizard posted.
+      state.item = { ...shared.studentItem };
+      if (h) state.item.itemId = await itemIdFor(h, state.item.publicId);
+      t.diagnostic(`reviewing ${state.item.publicId} from the student suite`);
+    } else if (!status.workerUp) {
+      return t.skip(WORKER_DOWN);
+    } else if (h) {
       state.item = await createPendingItem(h, { description });
     } else {
       t.diagnostic(`${NO_HARNESS}; posting through the student wizard instead`);
@@ -126,6 +132,7 @@ describe('staff app in a browser', { skip }, () => {
         // Open the card: a link on the card itself, or a Review link or button in its row. A queue
         // that reviews inline has neither; then the card is the item's row.
         let card = page.locator('main');
+        let inline = false;
         const cardLink = page.getByRole('link').filter({ hasText: text });
         const row = await scopeFor(page, text, OPEN_CARD);
         if (await isShown(cardLink)) {
@@ -135,27 +142,33 @@ describe('staff app in a browser', { skip }, () => {
         } else {
           card = await scopeFor(page, text, APPROVE);
           assert.ok(card, `no way to open the review card for "${state.item.description}" from the queue`);
+          inline = true;
         }
+        if (!inline) await page.waitForURL(new RegExp(`/staff/${SCHOOL}/items/`), { timeout: TIMEOUTS.navigation }).catch(() => {});
         await settle(page);
 
         const approve = await shown(card.getByRole('button', { name: APPROVE }), 'the visible Approve button on the review card');
         const key = await shortcutFor(approve, 'a');
         const startUrl = page.url();
+        // The database decides when the harness is here; otherwise the page must say so, move on, or
+        // (inline queue) drop the item from the pending list.
         const approved = async () => {
           const db = await dbState(state.item);
-          if (db && db.review_status !== 'approved') return false;
+          if (db) return db.review_status === 'approved';
           return (
             page.url() !== startUrl ||
             (await isShown(page.getByText(/\bapproved\b|publishing|getting (the )?photos ready|generating/i))) ||
-            !(await isShown(card.getByRole('button', { name: APPROVE })))
+            (inline && !(await isShown(page.getByText(text))))
           );
         };
 
-        await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+        // Letter keys do not activate a focused button, so pressing the key with focus on this card's
+        // Approve button still tests the shortcut, and keeps an inline queue on the right card.
+        if (inline) await approve.focus();
+        else await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
         await page.keyboard.press(key);
         if (!(await eventually(approved, { timeout: 6_000 }).catch(() => false))) {
-          // A shortcut may be live only while the card has focus (WCAG 2.1.4); letter keys do not
-          // activate a focused button, so focusing Approve and pressing the key still tests the shortcut.
+          // A shortcut may be live only while the card has focus (WCAG 2.1.4): try again from there.
           await approve.focus();
           await page.keyboard.press(key);
           await eventually(approved, { message: `pressing "${key}" on the review card did not approve the item` });

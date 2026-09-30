@@ -26,6 +26,10 @@ export function uniqueText(prefix) {
   return `${prefix} ${pick()} ${pick()} ${pick()} ${pick()}`;
 }
 
+// State shared by suites that run in one process (tests/e2e/index.js): the student suite records
+// the item it posted so the staff suite reviews that same item instead of making its own.
+export const shared = {};
+
 let harness;
 
 // The integration harness module, or null when it is not in this checkout yet.
@@ -64,6 +68,11 @@ export async function createPendingItem(h, { description, note = 'e2e staff-only
   assert.equal(done.status, 200, `complete: ${JSON.stringify(done.data)}`);
   await h.drain(10).catch(() => {}); // without the scheduler bearer, the dev scheduler drains every 10 s
   return { itemId: draft.data.itemId, publicId: done.data.publicId, description };
+}
+
+export async function itemIdFor(h, publicId) {
+  const [row] = await h.admin()`select id::text as id from public.items where public_id = ${publicId}`;
+  return row?.id ?? null;
 }
 
 export async function itemState(h, itemId) {

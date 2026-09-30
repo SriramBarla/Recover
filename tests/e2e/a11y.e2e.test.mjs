@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { SCHOOL, TIMEOUTS, stackStatus, warm, withBrowser } from '../../playwright.config.mjs';
-import { assertAccessible, reflowProblems } from './lib/a11y.mjs';
+import { assertAccessible, documentProblems, focusProblems, reflowProblems, unnamedControls } from './lib/a11y.mjs';
 import { NO_HARNESS, createPendingItem, jpegPhoto, loadHarness, publishItem, uniqueText } from './lib/data.mjs';
 import { devLoginAvailable, devSignIn } from './lib/staff.mjs';
 import {
@@ -78,6 +78,36 @@ function listingPath() {
   return listing;
 }
 
+// The checks must not pass vacuously: on a fixture page with planted problems each one reports.
+// Needs no stack, so it also runs when the suites below skip.
+describe('the accessibility checks find planted problems (fixture page)', () => {
+  it('flags missing alt and lang, unnamed controls, positive tabindex, missing focus ring and sideways scroll', T, (t) =>
+    withBrowser(
+      t,
+      async ({ page }) => {
+        await page.setContent(`<!doctype html><html><head><style>
+          :focus-visible { outline: 3px solid blue; } .bare:focus-visible { outline: none; } .wide { width: 600px; height: 4px; }
+          </style></head><body>
+          <label>Named <input name="ok"></label> <input name="unnamed"> <select name="pick"><option>x</option></select>
+          <button></button> <button class="bare">No ring</button> <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+          <div tabindex="2">positive</div> <div style="display:none"><input name="hidden"></div> <div class="wide"></div>
+          </body></html>`);
+        const doc = (await documentProblems(page)).join('\n');
+        assert.match(doc, /img without an alt/);
+        assert.match(doc, /no lang attribute/);
+        assert.match(doc, /positive tabindex=2/);
+        const names = (await unnamedControls(page)).join('\n');
+        assert.match(names, /name="unnamed"/);
+        assert.match(names, /name="pick"/);
+        assert.match(names, /button has no accessible name/);
+        assert.doesNotMatch(names, /name="ok"|name="hidden"/);
+        assert.match((await focusProblems(page)).join('\n'), /No ring/);
+        assert.match((await reflowProblems(page)).join('\n'), /scrolls sideways at 320px/);
+      },
+      { viewport: { width: 320, height: 600 } },
+    ));
+});
+
 describe('accessibility basics (Appendix H, without axe)', { skip: status.skip }, () => {
   before(() => warm([HOME, `${HOME}/found`, `${HOME}/lost`, '/staff/signin', QUEUE]), { timeout: 300_000 });
   after(async () => {
@@ -86,7 +116,8 @@ describe('accessibility basics (Appendix H, without axe)', { skip: status.skip }
 
   it('student home', T, (t) =>
     withBrowser(t, async ({ page }) => {
-      await open(page, HOME);
+      const res = await open(page, HOME);
+      assert.equal(res.status(), 200, `GET ${HOME}`);
       await assertAccessible(page, HOME);
     }));
 
@@ -129,7 +160,8 @@ describe('accessibility basics (Appendix H, without axe)', { skip: status.skip }
 
   it('lost report form', T, (t) =>
     withBrowser(t, async ({ page }) => {
-      await open(page, `${HOME}/lost`);
+      const res = await open(page, `${HOME}/lost`);
+      assert.equal(res.status(), 200, `GET ${HOME}/lost`);
       await assertAccessible(page, `${HOME}/lost`);
     }));
 

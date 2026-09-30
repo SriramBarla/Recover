@@ -183,7 +183,7 @@ export const CATEGORY = {
 };
 
 export const DESCRIPTION = /descri|what (is|was) it|what did you (find|lose)|tell us/i;
-export const NOTE = /note|only staff|staff.only|exact(ly)? where|which room|room number/i;
+export const NOTE = /note|only staff|staff.only|where exactly|exact(ly)? (where|spot|place)|which room|room number/i;
 
 export function publicIdRe(code) {
   return new RegExp(`\\b${code}-[A-Z0-9]{1,6}-\\d{6,}\\b`);
@@ -280,7 +280,7 @@ export async function placePinByKeyboard(page, map) {
   return eventually(
     async () => {
       const fresh = (await pinTexts(page, map)).filter((s) => !before.includes(s) && PIN_TEXT.test(s));
-      return fresh.length ? fresh : null;
+      return fresh.length ? [...new Set(fresh)] : null;
     },
     { message: 'map: after arrow keys and Enter, no aria attribute, live region or visible text reported the pin (expected something like "Pin placed near Main Hall")' },
   );

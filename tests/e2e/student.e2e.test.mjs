@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 import { SCHOOL, TIMEOUTS, WORKER_DOWN, stackStatus, warm, withBrowser } from '../../playwright.config.mjs';
-import { jpegPhoto, uniqueText } from './lib/data.mjs';
+import { jpegPhoto, shared, uniqueText } from './lib/data.mjs';
 import {
   CATEGORY,
   DEADLINE,
@@ -16,8 +16,8 @@ import {
   categorySelect,
   chooseCategory,
   clickNext,
-  continueTo,
   esc,
+  eventually,
   fileInput,
   isShown,
   open,
@@ -70,11 +70,13 @@ describe('student PWA in a browser', { skip: status.skip }, () => {
     if (!status.workerUp) return t.skip(WORKER_DOWN);
     await withBrowser(t, async (s) => {
       const { page } = s;
+      const description = uniqueText('e2e navy metal water bottle');
       const { publicId, pinFeedback } = await postFoundItem(page, SCHOOL, {
-        description: uniqueText('e2e navy metal water bottle'),
+        description,
         note: 'C214 by the window',
         photo: await jpegPhoto(),
       });
+      shared.studentItem = { description, publicId };
       t.diagnostic(`posted ${publicId}; pin reported as: ${pinFeedback.join(' | ')}`);
       await shown(page.getByText(DEADLINE), 'done screen: the drop-off deadline ("bring it to ... by ...")');
       const uploads = s.requests.filter((r) => r.method === 'PUT');
@@ -87,8 +89,18 @@ describe('student PWA in a browser', { skip: status.skip }, () => {
     withBrowser(t, async (s) => {
       const { page } = s;
       await open(page, `${HOME}/found`);
+      // The directions must come from choosing Phone: new "take it to" text (a screen or an inline
+      // panel), not a hint the category step already showed.
+      const office = page.getByText(/take it to/i);
+      await shown(categoryChoice(page, CATEGORY.phone).or(categorySelect(page)), 'the category step');
+      const hintsBefore = await office.count();
       await chooseCategory(page, CATEGORY.phone);
-      await continueTo(page, page.getByText(/take it to/i), 'category step');
+      const directed = async () =>
+        (await office.count()) > hintsBefore || ((await isShown(office)) && !(await isShown(categoryChoice(page, CATEGORY.bottle))));
+      if (!(await eventually(directed, { timeout: 2_500 }).catch(() => false))) {
+        await clickNext(page, 'category step');
+        await eventually(directed, { message: 'choosing Phone never showed "take it to the office" directions' });
+      }
       await shown(page.getByText(/office|booth/i), 'where to take it');
       await shown(page.getByText(/\d{1,2}(:\d{2})?\s*[ap]\.?m\b|school days|lunch/i), 'the office hours');
       await settle(page);
@@ -126,7 +138,14 @@ describe('student PWA in a browser', { skip: status.skip }, () => {
         }
         const submit = page.getByRole('button', { name: SUBMIT });
         if (described && (await isShown(submit))) {
-          await submit.first().click();
+          // The report is saved by POST /api/s/[code]/lost-reports (or a server action on /lost).
+          const [saved] = await Promise.all([
+            page.waitForResponse((r) => r.request().method() === 'POST' && /\/lost/.test(new URL(r.url()).pathname), {
+              timeout: TIMEOUTS.navigation,
+            }),
+            submit.first().click(),
+          ]);
+          assert.ok(saved.status() < 400, `saving the report returned ${saved.status()}: ${(await saved.text().catch(() => '')).slice(0, 300)}`);
           submitted = true;
         } else {
           await clickNext(page, 'lost report form');
@@ -134,12 +153,8 @@ describe('student PWA in a browser', { skip: status.skip }, () => {
       }
       assert.ok(described, 'lost report form: no description field');
       assert.ok(submitted, 'lost report form: no submit button');
-      await page.waitForLoadState('load');
       await settle(page);
-      if (!new URL(page.url()).pathname.endsWith('/lost/mine')) {
-        await shown(page.getByText(/saved|filed|reported|we will|we'll|your lost reports/i), 'a confirmation that the report was filed');
-        await open(page, `${HOME}/lost/mine`);
-      }
+      if (!new URL(page.url()).pathname.endsWith('/lost/mine')) await open(page, `${HOME}/lost/mine`);
       await shown(page.getByText(description), '"Your lost reports" lists the new report');
       await open(page, HOME);
       await shown(action(page, /your lost reports/i), 'the "Your lost reports" card on home');

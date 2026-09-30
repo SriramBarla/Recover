@@ -72,6 +72,11 @@ export async function warm(paths) {
   }
 }
 
+// In `next dev` the proxy's nonce-only style-src blocks the inline styles that the Next.js dev-tools
+// overlay injects, which logs a CSP error per style on every page. That overlay never ships, so its
+// messages are counted but not treated as application console errors.
+const DEV_TOOLING = /next-devtools/;
+
 function slug(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90) || 'e2e';
 }
@@ -97,6 +102,7 @@ async function capture(session, err, t) {
     '',
     'console errors:',
     ...session.consoleErrors,
+    `(${session.devToolingErrors} more from the Next.js dev-tools overlay, ignored)`,
     '',
     'HTTP responses >= 400:',
     ...session.httpErrors,
@@ -104,13 +110,6 @@ async function capture(session, err, t) {
   writeFileSync(`${base}.log.txt`, log);
   const note = `screenshot: ${files[0] ?? '(none)'}; log: ${base}.log.txt`;
   if (typeof t?.diagnostic === 'function') t.diagnostic(note);
-  if (err && typeof err === 'object' && typeof err.message === 'string') {
-    try {
-      err.message = `${err.message}\n    [${note}]`;
-    } catch {
-      // some errors have a read-only message
-    }
-  }
 }
 
 // Runs fn({ page, context, browser, consoleErrors, httpErrors, requests }) in a fresh Chromium, then
@@ -120,7 +119,7 @@ async function capture(session, err, t) {
 export async function withBrowser(t, fn, opts = {}) {
   const name = typeof t === 'string' ? t : (t?.fullName ?? t?.name ?? 'e2e');
   const browser = await chromium.launch({ headless: HEADLESS, slowMo: SLOW_MO });
-  const session = { browser, name, consoleErrors: [], httpErrors: [], requests: [] };
+  const session = { browser, name, consoleErrors: [], devToolingErrors: 0, httpErrors: [], requests: [] };
   try {
     const context = await browser.newContext({
       baseURL: BASE_URL,
@@ -135,8 +134,9 @@ export async function withBrowser(t, fn, opts = {}) {
     context.setDefaultNavigationTimeout(TIMEOUTS.navigation);
     context.on('console', (msg) => {
       if (msg.type() !== 'error') return;
-      const at = msg.location()?.url;
-      session.consoleErrors.push(at ? `${msg.text()} (at ${at})` : msg.text());
+      const at = msg.location()?.url ?? '';
+      if (DEV_TOOLING.test(at)) session.devToolingErrors += 1;
+      else session.consoleErrors.push(at ? `${msg.text()} (at ${at})` : msg.text());
     });
     context.on('weberror', (e) => session.consoleErrors.push(`uncaught: ${e.error()?.message ?? e.error()}`));
     context.on('request', (r) => session.requests.push({ method: r.method(), url: r.url() }));
