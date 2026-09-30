@@ -460,6 +460,19 @@ export function dateOf(v: unknown, field: string): string {
   return v;
 }
 
+// Stats window: defaults to the last 30 days (UTC dates); at most 366 days; from <= to.
+export function rangeOf(from: unknown, to: unknown, nowMs = Date.now()): { from: string; to: string } {
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  const toDay = to === undefined || to === null || to === '' ? today : dateOf(to, 'to');
+  const fromDay =
+    from === undefined || from === null || from === ''
+      ? new Date(Date.parse(`${toDay}T00:00:00Z`) - 29 * 86_400_000).toISOString().slice(0, 10)
+      : dateOf(from, 'from');
+  const span = (Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86_400_000;
+  if (span < 0 || span > 366) throw new PublicError('invalid_input', 'from');
+  return { from: fromDay, to: toDay };
+}
+
 // Timestamps are forwarded exactly as the server issued them (section 5); only the shape is checked.
 export function isoOf(v: unknown, field: string): string {
   if (typeof v !== 'string' || v.length > 40 || !/^\d{4}-\d{2}-\d{2}T[0-9:.+\-Z]+$/.test(v) || Number.isNaN(Date.parse(v))) {
@@ -498,6 +511,116 @@ export const DISPOSITIONS = ['donated', 'disposed'] as const;
 export const ASSIGNABLE_ROLES = ['reviewer', 'office', 'school_admin'] as const; // never district_admin (§5.5)
 export const MEMBER_STATUSES = ['active', 'deactivated'] as const;
 export const POST_MODES = ['staff', 'backfill'] as const;
+
+// ---------- structured bodies (jsonb arguments) ----------
+
+const EDIT_KEYS = ['description', 'category', 'zoneId', 'dropoffLocationId'] as const;
+
+// p_edits for approve-with-edits and edit (contract 6.2): only these four keys, or null for none.
+export function editsOf(v: unknown): Record<string, unknown> | null {
+  if (v === undefined || v === null) return null;
+  if (!isPlainObject(v)) throw new PublicError('invalid_input', 'edits');
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(v)) {
+    if (!(EDIT_KEYS as readonly string[]).includes(key)) throw new PublicError('invalid_input', key);
+  }
+  if ('description' in v) out.description = textOf(v.description, 'description', { min: 2, max: 120 });
+  if ('category' in v) out.category = enumOf(v.category, 'category', ALL_CATEGORIES);
+  if ('zoneId' in v) out.zoneId = uuidOrNull(v.zoneId, 'zoneId');
+  if ('dropoffLocationId' in v) out.dropoffLocationId = uuidOf(v.dropoffLocationId, 'dropoffLocationId');
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+type ChangeRule = (v: unknown, field: string) => unknown;
+
+const boolRule: ChangeRule = (v, f) => boolOf(v, f);
+const intRule = (min: number, max: number): ChangeRule => (v, f) => intOf(v, f, min, max);
+
+function changesOf(v: unknown, rules: Record<string, ChangeRule>): Record<string, unknown> {
+  if (!isPlainObject(v)) throw new PublicError('invalid_input', 'changes');
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(v)) {
+    const rule = rules[key];
+    if (!rule) throw new PublicError('invalid_input', key);
+    out[key] = rule(value, key);
+  }
+  if (Object.keys(out).length === 0) throw new PublicError('invalid_input', 'changes');
+  return out;
+}
+
+// p_changes for api_staff_config_update (§5.5). SQL re-checks the retention floor and ceiling.
+export function configChangesOf(v: unknown): Record<string, unknown> {
+  return changesOf(v, {
+    studentPostingEnabled: boolRule,
+    lostReportsEnabled: boolRule,
+    crossSchoolSearchEnabled: boolRule,
+    retentionDays: intRule(1, 365),
+    neverArrivedSchoolDays: intRule(1, 10),
+    enabledCategories: (x, f) => {
+      if (!Array.isArray(x) || x.length > ALL_CATEGORIES.length) throw new PublicError('invalid_input', f);
+      return [...new Set(x.map((c) => enumOf(c, f, ALL_CATEGORIES)))];
+    },
+  });
+}
+
+const DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+
+// p_changes for api_district_settings_update (§5.6; G-06 worker mode).
+export function districtChangesOf(v: unknown): Record<string, unknown> {
+  return changesOf(v, {
+    retentionDaysFloor: intRule(1, 365),
+    retentionDaysCeiling: intRule(1, 365),
+    staffEmailDomains: (x, f) => {
+      if (!Array.isArray(x) || x.length === 0 || x.length > 10) throw new PublicError('invalid_input', f);
+      const out = x.map((d) => {
+        if (typeof d !== 'string') throw new PublicError('invalid_input', f);
+        const s = d.trim().toLowerCase();
+        if (!DOMAIN_RE.test(s) || s.length > 253) throw new PublicError('invalid_input', f);
+        return s;
+      });
+      return [...new Set(out)];
+    },
+    studentPostingGlobalEnabled: boolRule,
+    lostReportsGlobalEnabled: boolRule,
+    crossSchoolSearchGlobalEnabled: boolRule,
+    screeningEnabled: boolRule,
+    screeningDailyCeiling: intRule(0, 100_000),
+    workerMode: (x, f) => enumOf(x, f, ['normal', 'quarantine'] as const),
+    lostReportTtlDays: intRule(1, 180),
+    rejectedMediaRetentionDays: intRule(1, 90),
+  });
+}
+
+export type CalendarDay = { day: string; isOpen: boolean; openAt: string | null; closeAt: string | null };
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+
+function timeOf(v: unknown, field: string): string {
+  if (typeof v !== 'string' || !TIME_RE.test(v)) throw new PublicError('invalid_input', field);
+  return v.length === 5 ? `${v}:00` : v;
+}
+
+// p_days for api_staff_calendar_upsert: [{day, isOpen, openAt, closeAt}] mirroring the
+// school_calendar_days CHECK (open days need open_at < close_at; closed days have neither).
+export function calendarDaysOf(v: unknown, max = 400): CalendarDay[] {
+  if (!Array.isArray(v) || v.length === 0 || v.length > max) throw new PublicError('invalid_input', 'days');
+  const seen = new Set<string>();
+  return v.map((raw) => {
+    if (!isPlainObject(raw)) throw new PublicError('invalid_input', 'days');
+    const day = dateOf(raw.day, 'day');
+    if (seen.has(day)) throw new PublicError('invalid_input', 'day');
+    seen.add(day);
+    const isOpen = boolOf(raw.isOpen, 'isOpen');
+    if (!isOpen) {
+      if ((raw.openAt ?? null) !== null || (raw.closeAt ?? null) !== null) throw new PublicError('invalid_input', 'openAt');
+      return { day, isOpen, openAt: null, closeAt: null };
+    }
+    const openAt = timeOf(raw.openAt, 'openAt');
+    const closeAt = timeOf(raw.closeAt, 'closeAt');
+    if (openAt >= closeAt) throw new PublicError('invalid_input', 'closeAt');
+    return { day, isOpen, openAt, closeAt };
+  });
+}
 
 // ---------- navigation ----------
 
