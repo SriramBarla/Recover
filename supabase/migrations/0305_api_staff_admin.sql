@@ -58,14 +58,17 @@ begin
   return make_date(y, m, d);
 end $$;
 
--- Calendar coverage ahead of the school's local today: days from today to the last calendar row on file (F-88).
+-- Calendar horizon (F-88; §24 asks for 90 days): consecutive calendar days on file starting at the school's
+-- local today. The first missing day ends the coverage, because deadline math reads a missing day as closed
+-- (G-01), so one far-future row must not inflate the number. Row k (1-based) is in the run iff day = today + k - 1.
 create or replace function private.admin_calendar_horizon(p_school_id uuid) returns int
 language sql stable set search_path = '' as $$
-  select coalesce(greatest(max(c.day) - (now() at time zone s.timezone)::date, 0), 0)
-    from public.schools s
-    left join public.school_calendar_days c on c.school_id = s.id
-   where s.id = p_school_id
-   group by s.id, s.timezone
+  select count(*)::int
+    from (select c.day, (now() at time zone s.timezone)::date as today, row_number() over (order by c.day) as k
+            from public.schools s
+            join public.school_calendar_days c on c.school_id = s.id
+           where s.id = p_school_id and c.day >= (now() at time zone s.timezone)::date) as x
+   where x.day - x.today = x.k - 1
 $$;
 
 -- The school settings DTO. `config` carries exactly the keys api_staff_config_update accepts (§5.5).

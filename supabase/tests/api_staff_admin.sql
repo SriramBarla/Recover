@@ -137,6 +137,13 @@ create function pg_temp.fchs() returns uuid language sql as $$
   select id from public.schools where code = 'FCHS'
 $$;
 
+-- independent statement of the horizon: offset of the first day from today with no calendar row
+create function pg_temp.coverage(p_school uuid, p_today date) returns int language sql as $$
+  select min(g.d::date) - p_today
+    from generate_series(p_today, p_today + 3000, interval '1 day') as g(d)
+   where not exists (select 1 from public.school_calendar_days c where c.school_id = p_school and c.day = g.d::date)
+$$;
+
 -- ---------- catalog: definer, owner, search_path, lock_timeout, grants ----------
 do $$
 declare
@@ -685,10 +692,18 @@ begin
                       jsonb_build_object('day', (v_today + 200)::text, 'isOpen', true, 'openAt', '08:00', 'closeAt', '15:30'),
                       jsonb_build_object('day', (v_today + 201)::text, 'isOpen', false, 'openAt', null, 'closeAt', null),
                       jsonb_build_object('day', (v_today + 202)::text, 'isOpen', true, 'openAt', '07:45', 'closeAt', '16:00'))));
-  perform pg_temp.ok(r = jsonb_build_object('upserted', 3, 'horizonDays',
-                                            (select max(day) from public.school_calendar_days where school_id = v_fchs) - v_today)
-                     and (r -> 'horizonDays')::int >= 202,
+  perform pg_temp.ok(r = jsonb_build_object('upserted', 3, 'horizonDays', pg_temp.coverage(v_fchs, v_today)),
                      'calendar_upsert: returns {upserted, horizonDays}');
+  -- the horizon is unbroken coverage from today: days far ahead do not count until the gap before them is filled
+  insert into public.school_calendar_days (school_id, day, is_open, source)
+  select v_fchs, d::date, false, 'test'
+    from generate_series(v_today, v_today + 199, interval '1 day') as d
+  on conflict (school_id, day) do nothing;
+  r := pg_temp.call('t305-fchs-admin', 'api_staff_calendar_upsert', 'calendar.write', null,
+                    jsonb_build_object('school_code', 'FCHS', 'days', jsonb_build_array(
+                      jsonb_build_object('day', (v_today + 200)::text, 'isOpen', true, 'openAt', '08:00', 'closeAt', '15:30'))));
+  perform pg_temp.ok((r -> 'horizonDays')::int = pg_temp.coverage(v_fchs, v_today) and (r -> 'horizonDays')::int >= 203,
+                     'calendar_upsert: horizon counts consecutive days from today');
   perform pg_temp.ok(exists (select 1 from public.school_calendar_days
                               where school_id = v_fchs and day = v_today + 200 and is_open
                                 and open_at = '08:00' and close_at = '15:30' and source = 'school')
