@@ -25,6 +25,13 @@ export function replayDedupeKey(job, now = new Date()) {
   return base.slice(0, 200 - suffix.length) + suffix;
 }
 
+// Audit metadata carries codes only (F-74): a last_error_code that is not a plain code (free text,
+// an exception message, anything with spaces or punctuation) is recorded as 'other'.
+export function auditCode(value) {
+  if (value === null || value === undefined) return null;
+  return /^[a-z][a-z0-9_]{0,59}$/.test(String(value)) ? String(value) : 'other';
+}
+
 export function jobId(value, flag) {
   if (!/^[0-9]{1,18}$/.test(String(value))) throw new UsageError(`--${flag} takes a numeric job id`);
   return String(value);
@@ -149,7 +156,7 @@ export async function run({ values, apply, sql, requestId, say }) {
     await sql.begin(async (tx) => {
       const r = await tx`update public.jobs set disposed_at = now() where id = ${id}::bigint and status = 'dead' and disposed_at is null returning id`;
       if (!r.length) throw new Error(`job ${id} changed meanwhile; nothing disposed`);
-      await writeAudit(tx, { ...audit, action: 'runbook.jobs_dispose', schoolId: job.school_id, targetId: id, metadata: { job_id: Number(id), kind: job.kind, error_code: job.last_error_code } });
+      await writeAudit(tx, { ...audit, action: 'runbook.jobs_dispose', schoolId: job.school_id, targetId: id, metadata: { job_id: Number(id), kind: job.kind, error_code: auditCode(job.last_error_code) } });
     });
     say(`job ${id} disposed (request_id ${requestId})`);
     return 0;
@@ -186,7 +193,7 @@ export async function run({ values, apply, sql, requestId, say }) {
       action: 'runbook.jobs_replay',
       schoolId: job.school_id,
       targetId: id,
-      metadata: { job_id: Number(id), new_job_id: Number(row.id), kind: job.kind, attempts: job.attempts, error_code: job.last_error_code },
+      metadata: { job_id: Number(id), new_job_id: Number(row.id), kind: job.kind, attempts: job.attempts, error_code: auditCode(job.last_error_code) },
     });
     return row.id;
   });
