@@ -400,7 +400,9 @@ begin
   return v_ledger;
 end $$;
 
--- G-01 late arrival: cancel deletion that has not started; returns false if any object is already gone.
+-- G-01 late arrival: cancel the NEVER-ARRIVED deletion that has not started; returns false if any of its
+-- objects is already gone. Deletions for any other reason (claimed, pulled, photo drop, severe content,
+-- rejected retention) are never cancelled here.
 create function private.cancel_pending_deletion(p_item_id uuid) returns boolean
 language plpgsql set search_path = '' as $$
 declare
@@ -409,12 +411,13 @@ begin
   select exists (
            select 1 from public.media_deletion_objects o
              join public.media_deletion_ledger l on l.id = o.ledger_id
-            where l.item_id = p_item_id and l.verified_at is null and o.deleted_at is not null)
+            where l.item_id = p_item_id and l.reason = 'never_arrived' and l.verified_at is null and o.deleted_at is not null)
       or exists (
            select 1 from public.jobs j
             where j.kind = 'delete_media' and j.status = 'running'
               and (j.payload->>'ledgerId')::bigint in
-                  (select id from public.media_deletion_ledger where item_id = p_item_id and verified_at is null))
+                  (select id from public.media_deletion_ledger
+                    where item_id = p_item_id and reason = 'never_arrived' and verified_at is null))
     into v_started;
   if v_started then
     return false;
@@ -422,8 +425,10 @@ begin
   update public.jobs set status = 'done', finished_at = now(), last_error_code = 'cancelled'
    where kind = 'delete_media' and status = 'queued'
      and (payload->>'ledgerId')::bigint in
-         (select id from public.media_deletion_ledger where item_id = p_item_id and verified_at is null);
-  delete from public.media_deletion_ledger where item_id = p_item_id and verified_at is null;
+         (select id from public.media_deletion_ledger
+           where item_id = p_item_id and reason = 'never_arrived' and verified_at is null);
+  delete from public.media_deletion_ledger
+   where item_id = p_item_id and reason = 'never_arrived' and verified_at is null;
   return true;
 end $$;
 
@@ -464,8 +469,11 @@ begin
      or i.deleted_at is not null or i.custody not in ('with_finder', 'at_location') then
     return false;
   end if;
-  if not p_force and (coalesce((i.screening_flags->>'hold')::boolean, false)
-                      or coalesce((i.screening_flags->>'quarantine')::boolean, false)) then
+  -- Quarantine (severe content, G-24) always blocks; p_force (staff confirm-publish) releases only a hold.
+  if coalesce((i.screening_flags->>'quarantine')::boolean, false) then
+    return false;
+  end if;
+  if not p_force and coalesce((i.screening_flags->>'hold')::boolean, false) then
     return false;
   end if;
   if not p_force and v_screening and i.screening_status = 'unscreened' then
