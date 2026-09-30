@@ -88,7 +88,20 @@ begin
     when 'media_tickets' then      -- 1 d (G-04)
       delete from public.media_tickets where created_at < now() - interval '1 day';
       get diagnostics v_n = row_count;
-    when 'map_drafts' then         -- rejected map drafts: objects deleted by delete_map_draft after 7 d (§9.4.1)
+    when 'map_drafts' then         -- rejected or abandoned map drafts: objects deleted by delete_map_draft after 7 d
+      -- (§9.4.1; 14 retention "7 d after rejection/abandon"). A draft not submitted within 7 days of creation is
+      -- abandoned: it becomes rejected first, because delete_map_draft never touches a draft or a version in
+      -- review. The row and its zones stay, so the school admin sees why and can start a new draft.
+      for v_row in
+        update public.map_versions v
+           set approval_status = 'rejected', rejected_reason = 'abandoned: not submitted within 7 days', active = false
+         where v.approval_status = 'draft' and v.created_at < now() - interval '7 days'
+        returning v.id, v.school_id
+      loop
+        perform private.audit(v_row.school_id, 'system', 'purge', null, 'map.abandon', 'map_versions', v_row.id::text,
+                              jsonb_build_object('approval_status', 'draft'),
+                              jsonb_build_object('approval_status', 'rejected'), '{}'::jsonb);
+      end loop;
       for v_row in
         select v.id, v.school_id
           from public.map_versions v
