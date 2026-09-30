@@ -28,8 +28,10 @@ export type MapPickerProps = {
   label?: string;
   // Draw every zone as a labelled circle (staff zone editor, review).
   showZones?: boolean;
-  // Read-only listings: outline this zone instead of showing a pin.
+  // Read-only listings: outline this zone instead of showing a pin. The public DTO carries only the
+  // zone name (unique per map version), so either id or name works.
   highlightZoneId?: string | null;
+  highlightZoneName?: string | null;
   // Fixed points such as drop-off locations.
   markers?: readonly MapMarker[];
   clearable?: boolean;
@@ -99,6 +101,7 @@ export function MapPicker({
   label = 'Campus map',
   showZones = false,
   highlightZoneId = null,
+  highlightZoneName = null,
   markers = [],
   clearable = false,
   zoneSelectLabel = 'Or choose an area from the list',
@@ -147,7 +150,10 @@ export function MapPicker({
   );
 
   const zone = nearestZone(zones, value, w, h);
-  const highlighted = highlightZoneId ? zones.find((z) => z.id === highlightZoneId) ?? null : null;
+  const highlighted =
+    (highlightZoneId ? zones.find((z) => z.id === highlightZoneId) : undefined) ??
+    (highlightZoneName ? zones.find((z) => z.name === highlightZoneName) : undefined) ??
+    null;
   const interactive = !readOnly;
 
   function place(p: MapPoint, spoken?: string) {
@@ -244,7 +250,7 @@ export function MapPicker({
           decoding="async"
           onLoad={(e) => readNatural(e.currentTarget)}
         />
-        {sized && showZones ? zones.map((z) => <ZoneShape key={z.id} zone={z} width={w} height={h} highlight={z.id === highlightZoneId} />) : null}
+        {sized && showZones ? zones.map((z) => <ZoneShape key={z.id} zone={z} width={w} height={h} highlight={z.id === highlighted?.id} />) : null}
         {sized && !showZones && highlighted ? <ZoneShape zone={highlighted} width={w} height={h} highlight /> : null}
         {markers.map((m) => (
           <span key={m.id} className="map-poi" style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}>

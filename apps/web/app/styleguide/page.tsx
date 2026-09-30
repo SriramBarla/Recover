@@ -726,7 +726,7 @@ export default function StyleguidePage() {
                 </div>
                 <div>
                   <Sub>Public listing: zone only, never the pin</Sub>
-                  <MapPicker src={CAMPUS_MAP} width={MAP_WIDTH} height={MAP_HEIGHT} value={null} zones={DEMO_ZONES} highlightZoneId="z-library" readOnly label="Where it was found" />
+                  <MapPicker src={CAMPUS_MAP} width={MAP_WIDTH} height={MAP_HEIGHT} value={null} zones={DEMO_ZONES} highlightZoneName="Library" readOnly label="Where it was found" />
                 </div>
               </div>
               <Sub>Staff: location pin editor with zones and drop-off points</Sub>
