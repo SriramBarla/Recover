@@ -1276,7 +1276,9 @@ begin
   if p_days is null or p_days not between 1 and 90 then
     perform private.fail('invalid_input', 'days');
   end if;
-  if p_reason is null or p_reason not in ('spam', 'inappropriate', 'abuse', 'other') then
+  -- Reason codes for the audit row; devices.block_reason is always 'staff' so staff blocks stay
+  -- distinguishable from auto_rejections.
+  if p_reason is null or p_reason not in ('spam', 'abuse', 'staff', 'inappropriate', 'other') then
     perform private.fail('invalid_input', 'reason');
   end if;
   v_digest := private.sapi_digest(s.id, p_item_id, p_report_id);

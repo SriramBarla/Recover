@@ -989,8 +989,10 @@ begin
   perform pg_temp.ok(pg_temp.n(format($f$select count(*) from public.devices d join public.items i
                                           on i.device_token_hash = d.token_hash and i.school_id = d.school_id
                                          where i.id = %L and d.blocked_until is null$f$, v)) = 1, 'unblock: cleared');
-  r := pg_temp.block('sapi-fchs-admin', 'FCHS', null, v_rep, 30, 'abuse');
+  r := pg_temp.block('sapi-fchs-admin', 'FCHS', null, v_rep, 30, 'staff');
   perform pg_temp.ok((r->>'blocked')::boolean, 'block: through a lost report');
+  perform pg_temp.eq(pg_temp.err(format('select pg_temp.block(%L, %L, %L, null, 7, %L)', 'sapi-fchs-office', 'FCHS', v,
+                                        'because I said so')), 'invalid_input/reason', 'block: reason codes only');
   perform pg_temp.eq(pg_temp.err(format('select pg_temp.block(%L, %L, null, %L, 7, %L)', 'sapi-sfhs-admin', 'SFHS', v_rep,
                                         'spam')), 'not_found', 'block: report of another school');
 end $$;
