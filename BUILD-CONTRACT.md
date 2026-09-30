@@ -613,7 +613,7 @@ These were agreed between agents while building and are now part of the contract
 - `system_screening_targets(p_item_id, p_policy_version)` returns `{photos:[{photoId, originalPath}]}`: current photos in `canonical_ready` or `public_ready` that have no screening run for that policy yet.
 - `system_media_ticket_redeem` also returns `itemId` and `publicPath`.
 - `system_deletion_objects` rows also carry `found`, `schoolId`, `itemId`, and `currentPath`.
-- `system_purge` kinds include `map_drafts`.
+- `system_purge` kinds include `map_drafts`. That purge first rejects any draft not submitted within 7 days of creation (reason `abandoned: not submitted within 7 days`, audit action `map.abandon`), then queues `delete_map_draft` for rejected versions.
 - Redeeming a `map.upload` ticket schedules `canonicalize_map` 60 s later.
 
 **Rate limits**

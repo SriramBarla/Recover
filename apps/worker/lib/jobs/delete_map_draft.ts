@@ -1,5 +1,5 @@
 // delete_map_draft {mapVersionId} (§9.4.1; G-07). Enqueued by system_map_activate once the public copy
-// exists, and by the nightly `map_drafts` purge for rejected versions after 7 days. Deletes both private
+// exists, and by the nightly `map_drafts` purge for rejected or abandoned versions after 7 days. Deletes both private
 // objects (the raw upload and its canonical JPEG), verifies both are gone, then system_map_draft_deleted
 // clears both keys. An activated version keeps its public copy in `maps`, including after retirement.
 // A version still in draft or district review is never touched.
