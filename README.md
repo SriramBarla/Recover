@@ -82,7 +82,7 @@ npm run typecheck
 
 ## Build status
 
-The whole v1 app is merged and runs end to end on the local stack. Deployment needs the district accounts (see `docs/DEPLOY.md`).
+The whole v1 app is merged and verified on a fresh reset of `main`: SQL 10/10, integration 15/15, browser E2E 22/22, and production builds with no warnings. Deployment needs the district accounts (see `docs/DEPLOY.md`).
 
 | Area | Pull requests | Verified by |
 |---|---|---|
@@ -91,15 +91,15 @@ The whole v1 app is merged and runs end to end on the local stack. Deployment ne
 | Shared modules (SigV4, Unicode, rate limits, logging, matcher) | #8 | 119 unit tests; the AWS SigV4 vectors |
 | SQL functions: student, staff, school admin, district, system and cron | #10, #11, #15, #16, #18, #28 | 21 + 221 + 159 + 101 + 565 SQL checks |
 | Worker (job drain, media pipeline, screening, brokers) | #13 | 54 unit tests; live storage checks; empty 401 on unauthenticated probes |
-| Student PWA | #17 | JS 134-142 KB gzipped (budget 150 KB) |
+| Student PWA | #17, #34, #36 | first-load JS 138.8-149.7 KB gzipped on the production build (budget 150 KB; `scripts/js-budget.mjs`) |
 | Staff and district apps | #14 | 46 unit tests; assertion vector parity |
 | Ops runbooks and scripts (24 runbooks) | #20, #25 | 48 unit tests; QR codes decode |
-| Browser E2E (Playwright) | #19 | 22/22 against the running stack |
+| Browser E2E (Playwright) | #19, #35 | 22/22 on a fresh reset of main |
 | Integration | #21 | end-to-end 15/15, from student post to verified deletion |
 | Design system | #23, #24 | E2E 22/22; 320 px reflow; named links |
 | Security reviews: web/worker, database, ops | #25, #26, #27, #30, #31 | `security_review.sql` (32 checks); production builds with 0 warnings |
 | Device-key rotation window | #32 | `device_rekey.sql` (47 checks); 322 unit tests; 10/10 SQL suites |
-| Design polish pass | `feat/design-polish` | in progress |
+| Design polish pass | #34 | every page at 320, 390, and 1280 px, light and dark |
 
 **Local performance check** (production build, 200 concurrent readers for 30 s): p95 was feed 3 ms, search 8 ms, listing 2 ms, meta 155 ms, with 0 errors. The staging run of `scripts/load.mjs` is still to do.
 
