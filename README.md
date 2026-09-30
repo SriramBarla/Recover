@@ -55,7 +55,8 @@ BUILD-CONTRACT.md    the coordination contract: function catalog, routes, jobs, 
 npm install
 supabase start              # Recover's local stack: API :55421, DB :55422
 supabase db reset           # apply migrations + seed
-node scripts/dev-env.mjs    # write apps/*/.env.local with fresh local keys
+node scripts/dev-env.mjs    # write apps/*/.env.local, sync Vault keys, clear the web data cache (rerun after every reset)
+node scripts/dev-seed-media.mjs  # upload the seeded campus maps
 npm run dev                 # web :3000, worker :3001, dev scheduler
 ```
 
