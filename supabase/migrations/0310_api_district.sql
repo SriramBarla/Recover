@@ -41,7 +41,7 @@ begin
     end if;
     return null;
   end if;
-  if p ~ '[\u0001-\u001F\u007F-\u009F؜‎‏‪-‮⁦-⁩]' then
+  if p ~ '[\x01-\x1F\x7F-\x9F\x061C\x200E\x200F\x202A-\x202E\x2066-\x2069]' then
     perform private.fail('invalid_input', p_field);
   end if;
   v := regexp_replace(btrim(normalize(p, NFC)), '\s+', ' ', 'g');
