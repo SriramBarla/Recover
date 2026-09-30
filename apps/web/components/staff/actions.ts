@@ -6,13 +6,18 @@ import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { signIn, signOut, staffDomainHint } from '../../auth.ts';
 import { devLoginEnabled } from '../../lib/env.ts';
-import { safeReturnPath } from '../../lib/ops.ts';
+import { googleAuthParams, safeReturnPath } from '../../lib/ops.ts';
+import { currentSession } from '../../lib/session.ts';
 
 export async function googleSignInAction(formData: FormData): Promise<void> {
   const callbackUrl = safeReturnPath(formData.get('callbackUrl'), '/staff');
   const hd = await staffDomainHint();
-  // hd is a hint for Google's account chooser only; the signIn callback enforces the domain.
-  await signIn('google', { redirectTo: callbackUrl }, hd ? { hd } : undefined);
+  // Step-up (G-31): the ?reauth=1 page posts here while the session is still live (requireFresh raises
+  // StepUpRequired only for a live session), so a Google sign-in over a live session re-authenticates
+  // at Google instead of clicking through the account chooser. hd is a hint for Google's account
+  // chooser only; the signIn callback enforces the domain.
+  const stepUp = (await currentSession()) !== null;
+  await signIn('google', { redirectTo: callbackUrl }, googleAuthParams({ hd, stepUp }));
 }
 
 export async function devSignInAction(formData: FormData): Promise<void> {

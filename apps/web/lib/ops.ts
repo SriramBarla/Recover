@@ -129,6 +129,30 @@ export const STEP_UP_OPS: ReadonlySet<string> = new Set([
 
 export const STEP_UP_MAX_AGE_S = 600;
 
+// Google authorization params for a staff sign-in (§14.1; G-31). hd is only a hint for the account
+// chooser. A step-up must re-authenticate at Google (prompt=login, max_age=0) instead of clicking
+// through select_account; these override the provider's default prompt, and auth.ts then takes the
+// session's authTime from the ID token's auth_time claim.
+export function googleAuthParams(opts: { hd: string | null; stepUp: boolean }): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (opts.hd) params.hd = opts.hd;
+  if (opts.stepUp) {
+    params.prompt = 'login';
+    params.max_age = '0';
+  }
+  return params;
+}
+
+// When the user last authenticated at Google (G-31): the ID token's auth_time claim, which Auth.js
+// passes to the callbacks as the validated `profile` claims, never later than now.
+// [VERIFY] V-6: whether Google sends auth_time and honors prompt=login / max_age=0. Until that is
+// verified, a sign-in whose token has no auth_time falls back to the server clock at the callback,
+// which is what the dev Credentials login always uses.
+export function authTimeFrom(claim: unknown, nowS: number): number {
+  if (typeof claim === 'number' && Number.isFinite(claim) && claim > 0) return Math.min(Math.floor(claim), nowS);
+  return nowS;
+}
+
 // ---------- function -> assertion spec ----------
 
 export type Scope = 'school' | 'district';
@@ -363,17 +387,23 @@ export function prepareCall(i: PrepareInput): { params: Args; bundle: AssertionB
 export const SESSION_ABSOLUTE_S = 24 * 60 * 60;
 export const SESSION_IDLE_S = 8 * 60 * 60;
 
-export type TokenTimes = { sub?: unknown; authTime?: unknown; lastSeen?: unknown };
+export type TokenTimes = { sub?: unknown; authTime?: unknown; signedInAt?: unknown; lastSeen?: unknown };
+export type LiveSession = { sub: string; authTime: number; signedInAt: number };
 
 // Returns the live session fields, or null when the token is malformed or past either window.
-export function liveSession(t: TokenTimes, nowS: number): { sub: string; authTime: number } | null {
+// authTime is when the user last authenticated at the identity provider and drives only step-up
+// (G-31); it can be much older than the session itself. The absolute window runs from signedInAt, the
+// server time the session was issued. Tokens issued before signedInAt existed fall back to authTime,
+// which was the issue time then.
+export function liveSession(t: TokenTimes, nowS: number): LiveSession | null {
   if (typeof t.sub !== 'string' || !t.sub) return null;
   if (typeof t.authTime !== 'number' || !Number.isFinite(t.authTime)) return null;
-  const lastSeen = typeof t.lastSeen === 'number' && Number.isFinite(t.lastSeen) ? t.lastSeen : t.authTime;
-  if (t.authTime > nowS + 60) return null;
-  if (nowS - t.authTime > SESSION_ABSOLUTE_S) return null;
+  const signedInAt = typeof t.signedInAt === 'number' && Number.isFinite(t.signedInAt) ? t.signedInAt : t.authTime;
+  const lastSeen = typeof t.lastSeen === 'number' && Number.isFinite(t.lastSeen) ? t.lastSeen : signedInAt;
+  if (t.authTime > nowS + 60 || signedInAt > nowS + 60) return null;
+  if (nowS - signedInAt > SESSION_ABSOLUTE_S) return null;
   if (nowS - lastSeen > SESSION_IDLE_S) return null;
-  return { sub: t.sub, authTime: t.authTime };
+  return { sub: t.sub, authTime: t.authTime, signedInAt };
 }
 
 export function isFresh(authTime: number, nowS: number, maxAgeS = STEP_UP_MAX_AGE_S): boolean {
