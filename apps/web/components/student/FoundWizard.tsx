@@ -254,7 +254,9 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
       apiFetch<Completed>(`/api/s/${code}/items/${a.itemId}/complete`, { method: 'POST', body: {}, idempotencyKey: a.completeKey }),
     );
     if (!completed.ok) {
-      if (needsNewKey(completed.error)) a.completeKey = newKey();
+      // api_complete_item is idempotent on its own, so a fresh key after any failure is harmless and keeps a
+      // stored 4xx from replaying on every retry.
+      a.completeKey = newKey();
       return stop(completed.error);
     }
 
