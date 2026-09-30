@@ -107,10 +107,14 @@ language sql immutable set search_path = '' as $$
                             'custody', p.custody, 'rowVersion', p.row_version)
 $$;
 
--- Lock one item of this school (tenant assertion). Drafts are invisible to staff; quarantined items
--- need school_admin+ (G-24). Row-version and predecessor guards stay in each caller.
-create or replace function private.sapi_lock_item(p_school_id uuid, p_item_id uuid, p_role public.staff_role)
-returns public.items
+-- Lock one item of this school (tenant assertion). Drafts are invisible to staff. With p_gate, a
+-- quarantined item needs school_admin+ (G-24): review and content operations are gated, custody and
+-- exposure-reducing operations (receive, transfer, claim, dispose, pull, delete) are not, because the
+-- physical item still has to be handled and they reveal no content. Row-version and predecessor
+-- guards stay in each caller.
+create or replace function private.sapi_lock_item(
+  p_school_id uuid, p_item_id uuid, p_role public.staff_role, p_gate boolean
+) returns public.items
 language plpgsql set search_path = '' as $$
 declare
   i public.items;
@@ -119,7 +123,7 @@ begin
   if not found or i.review_status = 'draft' then
     perform private.fail('not_found');
   end if;
-  if private.sapi_quarantined(i.screening_flags) and private.role_rank(p_role) < 3 then
+  if p_gate and private.sapi_quarantined(i.screening_flags) and private.role_rank(p_role) < 3 then
     perform private.fail('forbidden');
   end if;
   return i;
@@ -563,7 +567,7 @@ begin
   ctx := private.assert_staff(p_assert, 'item.approve', s.id, p_item_id, p_row_version,
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'row_version', p_row_version,
                        'edits', p_edits));
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, true);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -617,7 +621,7 @@ begin
   if p_reason is null or p_reason not in ('inappropriate', 'not_an_item', 'duplicate', 'pii_visible', 'spam', 'other') then
     perform private.fail('invalid_input', 'reason');
   end if;
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, true);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -691,7 +695,7 @@ begin
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'row_version', p_row_version,
                        'location_id', p_location_id));
   perform private.sapi_active_location(s.id, p_location_id, 'location_id');
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -757,7 +761,7 @@ begin
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'row_version', p_row_version,
                        'location_id', p_location_id));
   perform private.sapi_active_location(s.id, p_location_id, 'location_id');
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -793,7 +797,7 @@ declare
 begin
   ctx := private.assert_staff(p_assert, 'item.claim', s.id, p_item_id, p_row_version,
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'row_version', p_row_version));
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -821,7 +825,7 @@ begin
   if p_disposition is null or p_disposition not in ('donated', 'disposed') then
     perform private.fail('invalid_input', 'disposition');
   end if;
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -862,8 +866,7 @@ begin
   v_admin := private.role_rank(ctx.role) >= 3;
   for i in select * from public.items where id = any (p_item_ids) and school_id = s.id order by id for update loop
     if i.custody = 'at_location' and i.deleted_at is null and i.review_status <> 'draft'
-       and (i.disposition_due_at is not null or v_admin)
-       and (v_admin or not private.sapi_quarantined(i.screening_flags)) then
+       and (i.disposition_due_at is not null or v_admin) then
       perform private.sapi_terminal(i, ('expired_' || p_disposition)::public.custody_status, ctx, v_req,
                                     'item.dispose', jsonb_build_object('disposition', p_disposition, 'bulk', true,
                                                                        'early', i.disposition_due_at is null));
@@ -900,7 +903,7 @@ begin
                                           'pii_visible', 'not_an_item', 'owner_request') then
     perform private.fail('invalid_input', 'reason');
   end if;
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -938,7 +941,7 @@ begin
                                           'inappropriate', 'other') then
     perform private.fail('invalid_input', 'reason');
   end if;
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -979,7 +982,7 @@ begin
   ctx := private.assert_staff(p_assert, 'item.edit', s.id, p_item_id, p_row_version,
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'row_version', p_row_version,
                        'edits', p_edits));
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, true);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -1028,7 +1031,7 @@ declare
 begin
   ctx := private.assert_staff(p_assert, 'item.confirm_publish', s.id, p_item_id, p_row_version,
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'row_version', p_row_version));
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, true);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -1065,7 +1068,7 @@ begin
   ctx := private.assert_staff(p_assert, 'item.photo_drop', s.id, p_item_id, p_row_version,
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'photo_id', p_photo_id,
                        'row_version', p_row_version));
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, true);
   if i.row_version is distinct from p_row_version then
     perform private.fail('state_changed', 'row_version');
   end if;
@@ -1210,7 +1213,7 @@ declare
 begin
   ctx := private.assert_staff(p_assert, 'item.complete', s.id, p_item_id, null,
     jsonb_build_object('school_code', p_school_code, 'item_id', p_item_id, 'objects', p_objects));
-  i := private.sapi_lock_item(s.id, p_item_id, ctx.role);
+  i := private.sapi_lock_item(s.id, p_item_id, ctx.role, false);
   if i.posted_by_kind = 'student' then
     perform private.fail('state_changed', 'posted_by_kind');
   end if;
