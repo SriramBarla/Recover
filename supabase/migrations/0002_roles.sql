@@ -26,6 +26,8 @@ $$;
 
 -- The migration role must be able to transfer function ownership to the NOLOGIN owners.
 grant recover_api_owner, recover_system_owner, recover_attestation_owner to postgres;
+-- SQL test suites run as postgres and switch to the login roles to exercise real privileges.
+grant recover_web, recover_worker to postgres;
 -- ALTER ... OWNER TO requires CREATE on the schema for the new owner. Granted only while the function
 -- families are being created; 0999_final_revokes.sql removes it again (final state: no CREATE).
 grant create on schema public, private to recover_api_owner, recover_system_owner, recover_attestation_owner;
