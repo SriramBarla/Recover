@@ -1272,10 +1272,11 @@ begin
   return jsonb_build_object('count', v_count);
 end $$;
 
--- §17 metrics, recomputed from the source tables for one day (each school's local day). high_value_redirects
--- has no source table (counted live by the API) and is left untouched. Claim cohorts of the previous 31 days are
--- refreshed too, because claims keep arriving for 30 days after receipt. Days older than 30 are refused: their
--- sources (search events, match edges) may already be purged.
+-- §17 metrics, recomputed from the source tables for one day, using each school's local day
+-- ((ts at time zone school.timezone)::date, the same key the API writers use). The five counters the API writes
+-- live (posted, lost_reports, matches_viewed, reports_closed_found, high_value_redirects) are never written here.
+-- Claim cohorts of the previous 31 days are refreshed too, because claims keep arriving for 30 days after
+-- receipt. Days older than 30 are refused: their sources (search events, match edges) may already be purged.
 create or replace function public.system_rollup_daily_stats(p_day date) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -1293,8 +1294,6 @@ begin
   ), v as (
     select s.id as school_id,
       (select count(*) from public.items i
-        where i.school_id = s.id and i.review_status <> 'draft' and i.created_at >= s.t0 and i.created_at < s.t1) as posted,
-      (select count(*) from public.items i
         where i.school_id = s.id and i.posted_by_kind = 'student' and i.review_status = 'approved'
           and i.reviewed_at >= s.t0 and i.reviewed_at < s.t1) as approved,
       (select count(*) from public.items i
@@ -1310,14 +1309,8 @@ begin
         where e.school_id = s.id and e.created_at >= s.t0 and e.created_at < s.t1) as searches,
       (select count(*) from public.search_events e
         where e.school_id = s.id and e.created_at >= s.t0 and e.created_at < s.t1 and e.result_count = 0) as zero_results,
-      (select count(*) from public.lost_reports r
-        where r.school_id = s.id and r.created_at >= s.t0 and r.created_at < s.t1) as lost_reports,
       (select count(*) from public.lost_report_matches m
         where m.school_id = s.id and m.matched_at >= s.t0 and m.matched_at < s.t1) as matches_surfaced,
-      (select count(*) from public.lost_report_matches m
-        where m.school_id = s.id and m.seen_at >= s.t0 and m.seen_at < s.t1) as matches_viewed,
-      (select count(*) from public.lost_reports r
-        where r.school_id = s.id and r.status = 'closed_found' and r.terminal_at >= s.t0 and r.terminal_at < s.t1) as closed_found,
       (select count(*) from public.items i
         where i.school_id = s.id and i.received_at >= s.t0 and i.received_at < s.t1
           and i.claimed_at <= i.received_at + interval '7 days') as cohort_7d,
@@ -1336,20 +1329,18 @@ begin
           and not coalesce(sr.signals->'ceiling' = 'true'::jsonb, false)) as screening_images
       from s
   )
+  -- posted, lost_reports, matches_viewed, reports_closed_found, high_value_redirects: API-owned, left out on purpose
   insert into public.daily_school_stats as d
-    (school_id, day, posted, approved, rejected, received, claimed, expired, searches, zero_result_searches,
-     lost_reports, matches_surfaced, matches_viewed, reports_closed_found, received_cohort_7d, received_cohort_30d,
-     queue_age_p95_hours, screening_images)
-  select v.school_id, p_day, v.posted, v.approved, v.rejected, v.received, v.claimed, v.expired, v.searches,
-         v.zero_results, v.lost_reports, v.matches_surfaced, v.matches_viewed, v.closed_found, v.cohort_7d,
-         v.cohort_30d, v.queue_p95, v.screening_images
+    (school_id, day, approved, rejected, received, claimed, expired, searches, zero_result_searches,
+     matches_surfaced, received_cohort_7d, received_cohort_30d, queue_age_p95_hours, screening_images)
+  select v.school_id, p_day, v.approved, v.rejected, v.received, v.claimed, v.expired, v.searches,
+         v.zero_results, v.matches_surfaced, v.cohort_7d, v.cohort_30d, v.queue_p95, v.screening_images
     from v
   on conflict (school_id, day) do update
-    set posted = excluded.posted, approved = excluded.approved, rejected = excluded.rejected,
+    set approved = excluded.approved, rejected = excluded.rejected,
         received = excluded.received, claimed = excluded.claimed, expired = excluded.expired,
         searches = excluded.searches, zero_result_searches = excluded.zero_result_searches,
-        lost_reports = excluded.lost_reports, matches_surfaced = excluded.matches_surfaced,
-        matches_viewed = excluded.matches_viewed, reports_closed_found = excluded.reports_closed_found,
+        matches_surfaced = excluded.matches_surfaced,
         received_cohort_7d = excluded.received_cohort_7d, received_cohort_30d = excluded.received_cohort_30d,
         queue_age_p95_hours = excluded.queue_age_p95_hours, screening_images = excluded.screening_images;
   get diagnostics v_count = row_count;
@@ -1569,8 +1560,15 @@ begin
     when 'health_checks' then      -- 30 d
       delete from public.health_checks where checked_at < now() - interval '30 days';
       get diagnostics v_n = row_count;
-    when 'rate_counters' then      -- 48 h
-      delete from public.rate_counters where window_start < now() - interval '48 hours';
+    when 'rate_counters' then      -- 48 h, but never before the counter's own window has ended:
+      -- API actions carry their window as a suffix (post_item:1d, post_item:7d); a row with an N-day window is
+      -- kept N + 1 days so the weekly post limit keeps its full history.
+      delete from public.rate_counters c
+       where c.window_start < now() - greatest(
+               interval '48 hours',
+               case when c.action ~ ':[0-9]{1,3}d$'
+                    then make_interval(days => substring(c.action from ':([0-9]{1,3})d$')::int + 1)
+                    else interval '0' end);
       get diagnostics v_n = row_count;
     when 'jobs' then               -- done 30 d; dead 90 d after operator disposition
       delete from public.jobs
