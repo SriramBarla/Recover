@@ -60,7 +60,8 @@ export type PublicMeta = {
 };
 
 export function toPublicMeta(m: Meta): PublicMeta {
-  const mapUrl = m.map ? publicUrl('maps', m.map.path) : null;
+  // A map is usable only with its key and canonical dimensions (G-07: nullable until canonical).
+  const mapUrl = m.map && m.map.width > 0 && m.map.height > 0 ? publicUrl('maps', m.map.path) : null;
   return {
     school: {
       id: m.school.id,

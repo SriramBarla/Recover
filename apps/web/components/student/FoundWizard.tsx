@@ -35,14 +35,18 @@ const TITLES: Record<Step, string> = {
   done: 'Thank you!',
 };
 
-// Server validation fields (invalid_input detail) mapped back to the step that owns them.
+// Server validation fields (invalid_input detail) mapped back to the step that owns them. The route names
+// fields in camelCase; the SQL functions' own checks use snake_case.
 const FIELD_STEP: Record<string, Step> = {
   category: 'category',
   photoCount: 'photos',
+  photo_count: 'photos',
   pin: 'where',
   mapVersionId: 'where',
+  map_version_id: 'where',
   note: 'where',
   dropoffLocationId: 'where',
+  dropoff_location_id: 'where',
   description: 'describe',
 };
 

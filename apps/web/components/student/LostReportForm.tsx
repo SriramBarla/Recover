@@ -52,7 +52,13 @@ export function LostReportForm({ meta, today }: { meta: PublicMeta; today: strin
     if (needsNewKey(r.error)) a.key = newKey();
     const f = r.error.field;
     const field: Field | undefined =
-      f === 'category' || f === 'description' || f === 'lostOn' ? f : f === 'pin' || f === 'mapVersionId' ? 'pin' : undefined;
+      f === 'category' || f === 'description' || f === 'lostOn'
+        ? f
+        : f === 'lost_on'
+          ? 'lostOn'
+          : f === 'pin' || f === 'mapVersionId' || f === 'map_version_id'
+            ? 'pin'
+            : undefined;
     const contact = r.error.code === 'invalid_input' && field === 'description' && hasContactInfo(description);
     setError({ message: contact ? CONTACT_INFO_MESSAGE : `${r.error.message}${retryHint(r.error)}`, field });
   }

@@ -1,11 +1,12 @@
 'use client';
 // This browser's open lost reports and their matches (§12.3). Viewing marks reports with new matches as
-// seen (F-63 funnel), then refreshes so the row versions are current. "This is it" closes the report as
-// found; "Dismiss" closes it as no longer needed. Every update bumps row_version (lost_reports_version
-// trigger), so a close that loses a race re-reads the report once and retries.
+// seen (F-63 funnel). api_mark_report_seen writes last_viewed_at, which bumps row_version
+// (lost_reports_version trigger), so "This is it" and "Dismiss" stay disabled until the seen calls finish
+// and the refreshed reports (with current row versions) arrive. A close that still loses a race (a new
+// match landing meanwhile) re-reads the report once and retries.
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import type { PublicLostReport, PublicMatch } from '@/lib/storage-url.ts';
 import { apiFetch } from './client-api.ts';
 import { categoryLabel, custodyLine, photoAlt } from './format.ts';
@@ -27,13 +28,20 @@ export function MyLostReports({
   const seen = useRef(false);
   // Badges reflect what was new when the page opened, even after marking seen refreshes the data.
   const [newOnOpen] = useState(() => new Set(reports.filter((r) => r.hasNew).map((r) => r.id)));
+  const [marking, setMarking] = useState(newOnOpen.size > 0);
+  const [refreshing, startRefresh] = useTransition();
+  const locked = marking || refreshing || busy !== null;
 
   useEffect(() => {
     if (seen.current) return;
     seen.current = true;
     const unseen = reports.filter((r) => r.hasNew);
     if (unseen.length === 0) return;
-    void Promise.all(unseen.map((r) => apiFetch(`/api/s/${code}/lost-reports/${r.id}/seen`, { method: 'POST' }))).then(() => router.refresh());
+    void Promise.all(unseen.map((r) => apiFetch(`/api/s/${code}/lost-reports/${r.id}/seen`, { method: 'POST' }))).then(() => {
+      // Both updates land in one render: the transition keeps the actions locked until fresh data arrives.
+      startRefresh(() => router.refresh());
+      setMarking(false);
+    });
   }, [code, reports, router]);
 
   async function close(report: ReportView, outcome: 'found' | 'dismiss', match?: PublicMatch) {
@@ -63,14 +71,26 @@ export function MyLostReports({
           ? `Great! Go to ${where} and give them item ID ${match.publicId}. Staff will check that it is yours.`
           : 'Report dismissed.',
     });
-    router.refresh();
+    startRefresh(() => router.refresh());
   }
 
+  // The empty state renders here, not in the page, so the confirmation survives the refresh that removes
+  // the report it is about.
   return (
     <div className="stack-lg">
       <div aria-live="polite">
         {message && <p className={message.ok ? 'notice notice-ok' : 'notice notice-danger'}>{message.text}</p>}
       </div>
+      {reports.length === 0 && (
+        <div className="notice stack">
+          <p>You have no open lost reports on this browser.</p>
+          <p>
+            <Link className="btn btn-primary" href={`/s/${code}/lost`} prefetch={false}>
+              Report what you lost
+            </Link>
+          </p>
+        </div>
+      )}
       {reports.map((report) => (
         <article key={report.id} className="card stack" aria-labelledby={`report-${report.id}`}>
           <div className="spread">
@@ -109,7 +129,7 @@ export function MyLostReports({
                       <button
                         type="button"
                         className="btn btn-primary btn-block"
-                        disabled={busy !== null}
+                        disabled={locked}
                         onClick={() => void close(report, 'found', m)}
                         aria-label={`This is it: ${m.publicId}`}
                       >
@@ -122,7 +142,7 @@ export function MyLostReports({
             </>
           )}
           <div>
-            <button type="button" className="btn btn-ghost" disabled={busy !== null} onClick={() => void close(report, 'dismiss')}>
+            <button type="button" className="btn btn-ghost" disabled={locked} onClick={() => void close(report, 'dismiss')}>
               Dismiss this report
             </button>
           </div>

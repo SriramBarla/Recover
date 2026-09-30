@@ -1,6 +1,5 @@
 // /s/[code]/lost/mine: this browser's lost reports and matches (§12.3). Read with the cookie-derived digest
 // only; the response is never cached (dynamic page, and the service worker skips /s/).
-import Link from 'next/link';
 import type { MyLostReport } from '@recover/shared/dto.ts';
 import { MyLostReports, type ReportView } from '@/components/student/MyLostReports.tsx';
 import { formatDay } from '@/components/student/format.ts';
@@ -36,18 +35,7 @@ export default async function MyLostReportsPage({ params }: Props) {
     <div className="container-narrow stack-lg" style={{ padding: 0 }}>
       <h1>Your lost reports</h1>
       <p className="hint">Reports filed from this browser. Only you and school staff can see them.</p>
-      {reports.length === 0 ? (
-        <div className="notice stack">
-          <p>You have no open lost reports on this browser.</p>
-          <p>
-            <Link className="btn btn-primary" href={`/s/${code}/lost`} prefetch={false}>
-              Report what you lost
-            </Link>
-          </p>
-        </div>
-      ) : (
-        <MyLostReports code={code} reports={reports} locationNames={locationNames(meta)} />
-      )}
+      <MyLostReports code={code} reports={reports} locationNames={locationNames(meta)} />
     </div>
   );
 }
