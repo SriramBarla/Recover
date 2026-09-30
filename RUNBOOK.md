@@ -434,10 +434,10 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
      select j.jobname, d.status, d.return_message, d.start_time
        from cron.job_run_details d join cron.job j using (jobid)
       order by d.start_time desc limit 10;
-     select id, status_code, timed_out, error_msg, created from net._http_response order by created desc limit 10;
      ```
 
-     - Failing pg_cron or pg_net calls: runbook 20.
+     - A `recover_drain` run that failed says why in `return_message`: `cron_drain: worker returned HTTP <status>` or `cron_drain: worker unreachable: <error>`. A drain that times out after 5 s while the worker keeps draining counts as success.
+     - Failing pg_cron runs or drain calls: runbook 20.
      - `401`s: the bearer hash (runbook 8) or deployment protection (O-24).
      - `5xx`s: check the `recover-worker` deployment logs and roll back the deployment.
   3. **Inspect leases** with `node scripts/jobs.mjs --running`. Expired leases are requeued, or dead-lettered at max attempts, by `system_reap_leases` at the start of every drain.
@@ -586,14 +586,14 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 
 ## 20. Worker scheduler fallback
 
-- **Trigger:** `alert.worker_stale` or `alert.health_gap`, failing rows in `cron.job_run_details`, or errors in `net._http_response`. Drill it once a term.
+- **Trigger:** `alert.worker_stale` or `alert.health_gap`, or failing rows in `cron.job_run_details`, including `recover_drain` runs that name an HTTP status or a connection error. Drill it once a term.
 - **Severity:** district.
 - **Owner:** the district admin with the maintainer.
 - **Steps:**
   1. **Find which half is failing.** `select jobid, jobname, schedule, active from cron.job order by jobid;` then use the two queries in runbook 13 step 2.
-     - `recover_drain` is the one-minute HTTP call (`private.cron_drain()`, through pg_net).
-     - The other jobs are SQL enqueues (`private.enqueue_periodic`) and need no pg_net.
-  2. **If pg_net fails but pg_cron runs,** switch only the drain to an external scheduler:
+     - `recover_drain` is the one-minute HTTP call (`private.cron_drain()`, through the `http` extension). pg_net must stay disabled (DEPLOY.md step 10).
+     - The other jobs are SQL enqueues (`private.enqueue_periodic`) and make no HTTP calls.
+  2. **If the drain call fails but pg_cron runs,** switch only the drain to an external scheduler:
      1. Disable the drain: `select cron.alter_job((select jobid from cron.job where jobname = 'recover_drain'), active := false);`
      2. On a district-controlled host, add a crontab entry. The bearer comes from the password manager and is the same value as the Vault `scheduler_bearer`:
 

@@ -29,6 +29,7 @@ create table public.items (
   expires_at              timestamptz,
   disposition_due_at      timestamptz,
   arrival_deadline_at     timestamptz,
+  arrival_basis_at        timestamptz,  -- G-01: the completion time the deadline counts from
   disposed_at             timestamptz,
   terminal_at             timestamptz,  -- G-14: custody became terminal
   withdrawn_at            timestamptz,  -- G-14: publication became withdrawn

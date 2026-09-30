@@ -20,7 +20,7 @@ recover-web  (Next.js, Vercel project 1)
    v
 Supabase Postgres <---- recover_worker login (system_* functions only) ---- recover-worker (Next.js, Vercel project 2)
    ^                                                                             |
-   |  pg_cron -> pg_net -> worker drain (jobs = transactional outbox)            |  the only holder of the Storage S3 key
+   |  pg_cron -> http -> worker drain (jobs = transactional outbox)              |  the only holder of the Storage S3 key
    +-----------------------------------------------------------------------------+  sharp canonicalization, SigV4, Vision via OIDC
 ```
 

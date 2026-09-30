@@ -1184,6 +1184,7 @@ declare
   v_pid uuid;
   v_public text;
   v_photos jsonb := '[]'::jsonb;
+  v_first jsonb;
   n int;
 begin
   ctx := private.assert_staff(p_assert, 'item.create', s.id, null, null,
@@ -1191,6 +1192,10 @@ begin
                        'description', p_description, 'note', p_note, 'map_version_id', p_map_version_id,
                        'pin_x', p_pin_x, 'pin_y', p_pin_y, 'location_id', p_location_id,
                        'photo_count', p_photo_count));
+  v_first := private.staff_replay_begin(p_assert, ctx, 'item.create');
+  if v_first is not null then
+    return v_first;  -- a replay of an assertion that already created this item
+  end if;
   if p_mode is null or p_mode not in ('staff', 'backfill') then
     perform private.fail('invalid_input', 'mode');
   end if;
@@ -1249,7 +1254,8 @@ begin
                                            'custody', 'at_location', 'posted_by_kind', p_mode),
                         jsonb_build_object('category', v_cat, 'photo_count', p_photo_count,
                                            'current_location_id', p_location_id));
-  return jsonb_build_object('itemId', v_id, 'publicId', v_public, 'photos', v_photos);
+  return private.staff_replay_finish(p_assert, ctx, 'item.create',
+                                     jsonb_build_object('itemId', v_id, 'publicId', v_public, 'photos', v_photos));
 end $$;
 
 -- Steps 2-3: after the worker complete-check, verify every declared incoming object for the current

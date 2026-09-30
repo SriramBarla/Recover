@@ -35,7 +35,7 @@ Owner decisions of 2026-09-30:
 
 **Storage.** The S3 endpoint is `http://127.0.0.1:55421/storage/v1/s3`, region `local`. Keys come from `supabase status -o env` (`S3_PROTOCOL_ACCESS_KEY_ID`, `S3_PROTOCOL_ACCESS_KEY_SECRET`). The public object base is `http://127.0.0.1:55421/storage/v1/object/public`.
 
-**Apps.** Web on `http://localhost:3000`, worker on `http://localhost:3001`. `npm run dev` (`scripts/dev.mjs`) starts web, worker, and a dev scheduler that POSTs the worker drain every 10 s. The dev scheduler is the local stand-in for `pg_cron`/`pg_net`, which remains the production path.
+**Apps.** Web on `http://localhost:3000`, worker on `http://localhost:3001`. `npm run dev` (`scripts/dev.mjs`) starts web, worker, and a dev scheduler that POSTs the worker drain every 10 s. The dev scheduler is the local stand-in for `pg_cron` calling the drain through the `http` extension, which remains the production path.
 
 **Reset.** `supabase db reset` applies `supabase/migrations/*.sql` in filename order, then `supabase/seed.sql`.
 
@@ -630,4 +630,11 @@ These were agreed between agents while building and are now part of the contract
 - The outbox `invalidate_cache` job expires the same tags through `/api/internal/revalidate`.
 
 **Calendar**
-- `0011_calendar_recompute.sql` recomputes open arrival deadlines whenever `school_calendar_days`, or a school's `never_arrived_school_days` or timezone, changes (G-01).
+- `0011_calendar_recompute.sql` recomputes open arrival deadlines for the edited school only, whenever its `school_calendar_days`, `never_arrived_school_days`, or timezone changes (G-01).
+- A recompute counts from `items.arrival_basis_at`, the completion time `/complete` stores. It only moves a deadline later, or fills one that missing coverage left NULL. It never moves one earlier.
+
+**Security review fixes**
+- pg_net is never installed. `private.cron_drain()` calls the worker synchronously through the `http` extension, so the bearer is never stored in a table. A 5 s timeout is the normal outcome; any other failure fails the cron run with the HTTP status or the connection error.
+- `api_staff_create_item` and `api_staff_map_create_draft` claim the assertion's idempotency key, or its `request_id` when there is none, in `idempotency_keys` (principal kind `staff`, operations `item.create` and `map.create`). A replay returns the first result. The same key with a different body is `idempotency_conflict`.
+- `recover_attestation_owner` reads `private.staff_assertion_keys` (the `staff_assertion_key_*` rows) and has no grant on `vault.decrypted_secrets`.
+- The login roles have USAGE on `public` only, apart from the catalogs. `supabase/tests/security_review.sql` checks all of the above.
