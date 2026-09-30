@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { deviceKeyReport, deviceKeys, devLoginEnabled, devWorkerAuthEnabled, ignoredDevFlags } from '../../apps/web/lib/env.ts';
 import { register } from '../../apps/web/instrumentation.ts';
+import { reportDeviceKeys, reportIgnoredDevFlags } from '../../apps/web/lib/startup.ts';
 
 const KEY_1 = randomBytes(32).toString('base64url');
 const KEY_2 = randomBytes(32).toString('base64url');
@@ -98,7 +99,7 @@ test('Vercel refuses both, and only the exact value 1 enables a switch', () => {
 
 test('startup logs one warning naming the ignored switches, never their values', () => {
   const secretish = 'value-that-must-not-appear';
-  const lines = stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: secretish }, () => register()));
+  const lines = stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: secretish }, () => reportIgnoredDevFlags()));
   assert.equal(lines.length, 1);
   const entry = JSON.parse(lines[0]);
   assert.equal(entry.level, 'warn');
@@ -106,13 +107,44 @@ test('startup logs one warning naming the ignored switches, never their values',
   assert.deepEqual(entry.flags, ['RECOVER_DEV_LOGIN', 'RECOVER_DEV_AUTH']);
   assert.ok(!lines[0].includes(secretish));
 
-  assert.deepEqual(stderrLines(() => withEnv(DEV, () => register())), [], 'next dev: nothing to report');
+  assert.deepEqual(stderrLines(() => withEnv(DEV, () => reportIgnoredDevFlags())), [], 'next dev: nothing to report');
   assert.deepEqual(
-    stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: undefined, RECOVER_DEV_AUTH: undefined }, () => register())),
+    stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: undefined, RECOVER_DEV_AUTH: undefined }, () => reportIgnoredDevFlags())),
     [],
     'a clean production environment is quiet',
   );
-  assert.deepEqual(stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', NEXT_RUNTIME: 'edge' }, () => register())), []);
+});
+
+test('register() runs the startup check on the Node.js runtime only', async () => {
+  const run = async (vars) => {
+    const saved = {};
+    for (const k of Object.keys(vars)) saved[k] = process.env[k];
+    for (const [k, v] of Object.entries(vars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    const lines = [];
+    const write = process.stderr.write;
+    process.stderr.write = (chunk) => {
+      lines.push(String(chunk).trim());
+      return true;
+    };
+    try {
+      await register();
+    } finally {
+      process.stderr.write = write;
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    return lines;
+  };
+  const production = { ...DEV, NODE_ENV: 'production' };
+  assert.equal((await run(production)).length, 1, 'Node.js: the ignored switches are reported once');
+  assert.deepEqual(await run({ ...production, NEXT_RUNTIME: 'edge' }), [], 'Edge: nothing is imported or logged');
+  const noKey = { ...production, RECOVER_DEV_LOGIN: undefined, RECOVER_DEV_AUTH: undefined, DEVICE_KEY_V1: undefined };
+  assert.deepEqual((await run(noKey)).map((l) => JSON.parse(l).event), ['device_keys_invalid'], 'Node.js: device keys are checked too');
 });
 
 test('device keys: version 1 by default, and a rotation window names two versions', () => {
@@ -165,14 +197,14 @@ test('device keys: startup names the problem, and the keys no version uses', () 
 });
 
 test('device keys: startup logs one error or one warning, names only', () => {
-  const lines = stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V1: undefined }, () => register()));
+  const lines = stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V1: undefined }, () => reportDeviceKeys()));
   assert.equal(lines.length, 1);
   const error = JSON.parse(lines[0]);
   assert.equal(error.level, 'error');
   assert.equal(error.event, 'device_keys_invalid');
   assert.equal(error.problem, 'Missing required environment variable DEVICE_KEY_V1');
 
-  const unused = stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2' }, () => register()));
+  const unused = stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2' }, () => reportDeviceKeys()));
   assert.equal(unused.length, 1);
   const warn = JSON.parse(unused[0]);
   assert.equal(warn.level, 'warn');
@@ -181,7 +213,7 @@ test('device keys: startup logs one error or one warning, names only', () => {
   assert.ok(!unused[0].includes(KEY_1) && !unused[0].includes(KEY_2));
 
   assert.deepEqual(
-    stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2', DEVICE_KEY_PREVIOUS: '1' }, () => register())),
+    stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2', DEVICE_KEY_PREVIOUS: '1' }, () => reportDeviceKeys())),
     [],
     'an open rotation window is quiet',
   );
