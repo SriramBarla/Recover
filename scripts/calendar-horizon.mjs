@@ -186,7 +186,7 @@ export async function run({ values, apply, sql, requestId, say }) {
     const [{ n }] = await sql`
       select count(*)::int as n from public.items
        where school_id = ${school.id} and custody = 'with_finder' and review_status <> 'draft' and arrival_deadline_at is not null`;
-    if (n) say(`note: ${n} open arrival deadline(s) were computed from the old calendar and are not recomputed here (late check-in covers them, G-01)`);
+    if (n) say(`note: the calendar trigger (0011_calendar_recompute.sql) recomputes the ${n} open arrival deadline(s) in the same transaction (G-01)`);
   }
   if (!apply) {
     dryRunNote(say);

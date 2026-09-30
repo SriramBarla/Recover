@@ -9,7 +9,7 @@
 //   codes and counts only and is checked here before it is sent (F-74);
 // - never prints a secret value (passwords, keys, the password part of the DB URL).
 import { randomUUID } from 'node:crypto';
-import { closeSync, existsSync, fchmodSync, openSync, readFileSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fchmodSync, openSync, readFileSync, realpathSync, unlinkSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -99,17 +99,36 @@ export function isLocalDb(url) {
   }
 }
 
-export function connect(url, name) {
-  const options = {
+// TLS for the admin connection. Remote databases get verify-full (chain and host name) against the
+// CA file named by PGSSLROOTCERT, the libpq variable psql also reads; download the Supabase CA from
+// Dashboard > Database > SSL Configuration. PGSSLROOTCERT=system verifies against the system CAs.
+// Without it the connection is encrypted but unverified ('require'), and runScript warns loudly.
+// The explicit option overrides any sslmode in the URL. The local stack uses no TLS.
+export const CA_ENV = 'PGSSLROOTCERT';
+
+export function tlsFor(url, env = process.env, read = readFileSync) {
+  if (isLocalDb(url)) return { ssl: false, mode: 'off (local stack)' };
+  const ca = env[CA_ENV];
+  if (ca === 'system') return { ssl: { rejectUnauthorized: true }, mode: 'verify-full (system CAs)' };
+  if (ca) return { ssl: { ca: read(ca), rejectUnauthorized: true }, mode: `verify-full (CA ${ca})` };
+  return {
+    ssl: 'require',
+    mode: 'require, certificate NOT verified',
+    warning: `the server certificate is NOT verified (sslmode=require). Set ${CA_ENV} to the Supabase CA file `
+      + '(Dashboard > Database > SSL Configuration) to connect with verify-full.',
+  };
+}
+
+export function connect(url, name, tls = tlsFor(url)) {
+  return postgres(url, {
     max: 1,
     prepare: false,
     idle_timeout: 5,
     connect_timeout: 10,
     onnotice: () => {},
     connection: { application_name: `recover-runbook:${name}` },
-  };
-  if (!/[?&]sslmode=/.test(url)) options.ssl = isLocalDb(url) ? false : 'require';
-  return postgres(url, options);
+    ssl: tls.ssl,
+  });
 }
 
 // ---------- audit (F-74) ----------
@@ -127,25 +146,38 @@ export function keyWords(key) {
   return String(key).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
+const SAFE_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+// The data rules, applied to string values and to object keys alike: an `@`, a storage-path-like
+// `<uuid>/<uuid>/` prefix, a 64-hex run (a SHA-256 or HMAC digest), three or more words (free text).
+function dataRules(s) {
+  const rules = [];
+  if (s.includes('@')) rules.push('at_sign');
+  if (STORAGE_PATH_RE.test(s)) rules.push('storage_path');
+  if (HEX_DIGEST_RE.test(s)) rules.push('hex_digest');
+  if (s.trim().split(/\s+/).length >= 3) rules.push('free_text');
+  return rules;
+}
+
 // Every place in a JSON value that could retain personal data or a secret: forbidden key names
-// (description, note, pin, email, ...), and string values with an `@`, a storage-path-like
-// `<uuid>/<uuid>/` prefix, a 64-hex run (a SHA-256 or HMAC digest), or three or more words (free text).
-// Returns [{at, rule}] and never the offending value.
+// (description, note, pin, email, ...), and keys or string values that break a data rule (a key
+// breaking one is reported as key_<rule>). Returns [{at, rule}] and never a value; a key is shown in
+// `at` only when it is a plain identifier that breaks no data rule, otherwise as <key n redacted>.
 export function privacyViolations(value, at = '$', out = []) {
   if (Array.isArray(value)) {
     value.forEach((v, i) => privacyViolations(v, `${at}[${i}]`, out));
   } else if (value !== null && typeof value === 'object') {
-    for (const [k, v] of Object.entries(value)) {
+    Object.entries(value).forEach(([k, v], i) => {
+      const keyRules = dataRules(k);
+      const where = `${at}.${keyRules.length || !SAFE_KEY_RE.test(k) ? `<key ${i + 1} redacted>` : k}`;
+      for (const rule of keyRules) out.push({ at: where, rule: `key_${rule}` });
       if (FORBIDDEN_KEYS.has(k.toLowerCase()) || keyWords(k).some((w) => FORBIDDEN_KEY_WORDS.has(w))) {
-        out.push({ at: `${at}.${k}`, rule: 'forbidden_key' });
+        out.push({ at: where, rule: 'forbidden_key' });
       }
-      privacyViolations(v, `${at}.${k}`, out);
-    }
+      privacyViolations(v, where, out);
+    });
   } else if (typeof value === 'string') {
-    if (value.includes('@')) out.push({ at, rule: 'at_sign' });
-    if (STORAGE_PATH_RE.test(value)) out.push({ at, rule: 'storage_path' });
-    if (HEX_DIGEST_RE.test(value)) out.push({ at, rule: 'hex_digest' });
-    if (value.trim().split(/\s+/).length >= 3) out.push({ at, rule: 'free_text' });
+    for (const rule of dataRules(value)) out.push({ at, rule });
   }
   return out;
 }
@@ -185,6 +217,49 @@ export async function enqueuePeriodic(sql, kind) {
 }
 
 // ---------- files, output, entry point ----------
+
+// A secret must never land in the working tree, where a `git add` could publish it. Resolves
+// symlinks on both sides; the parent directory must exist.
+export function assertOutsideRepo(file, root = ROOT) {
+  const abs = path.resolve(file);
+  let dir;
+  try {
+    dir = realpathSync(path.dirname(abs));
+  } catch {
+    throw new UsageError(`directory ${path.dirname(abs)} does not exist`);
+  }
+  const rel = path.relative(realpathSync(root), path.join(dir, path.basename(abs)));
+  if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+    throw new UsageError(`${abs} is inside the repository; write secret files outside the working tree (for example ~/)`);
+  }
+  return abs;
+}
+
+// Every runbook change writes its audit row in the same transaction, so after a client-side error
+// the row tells whether the commit landed anyway: true, false, or null when the lookup fails.
+export async function auditLanded(sql, requestId) {
+  try {
+    return (await sql`select 1 from public.audit_log where request_id = ${requestId}::uuid limit 1`).length > 0;
+  } catch {
+    return null;
+  }
+}
+
+// After a failed apply that had already written a secret file: only a confirmed "not committed"
+// deletes the file. If the commit landed, or the lookup fails, the file is kept, because deleting the
+// only copy of a live secret would lock the service out.
+export async function settleOutFile(sql, requestId, file, say) {
+  const landed = await auditLanded(sql, requestId);
+  if (landed === false) {
+    unlinkSync(file);
+    say(`nothing was committed; removed ${file}`);
+    return 'deleted';
+  }
+  say(landed
+    ? `WARNING: the change WAS committed (audit row for request_id ${requestId} exists) although the client saw an error; ${file} holds the new secret and is kept`
+    : `WARNING: could not confirm whether the change committed; ${file} is kept. Look for request_id ${requestId} in audit_log before deleting it`);
+  return 'kept';
+}
 
 // Mode 600 from creation; refuses to overwrite an existing file.
 export function writeSecretFile(file, text) {
@@ -242,9 +317,17 @@ export async function runScript({ name, usage, options = {}, needsDb = true, run
     return;
   }
   const target = resolveDbUrl(args.values);
-  const sql = needsDb ? connect(target.url, name) : null;
+  let sql = null;
   try {
-    if (sql) say(`database ${describeDb(target.url)} (${target.source})`);
+    if (needsDb) {
+      const tls = tlsFor(target.url);
+      if (tls.warning) {
+        const bar = '*'.repeat(78);
+        console.error(`${bar}\n${name}: WARNING: ${tls.warning}\n${bar}`);
+      }
+      sql = connect(target.url, name, tls);
+      say(`database ${describeDb(target.url)} (${target.source}; TLS ${tls.mode})`);
+    }
     const code = await run({ ...args, sql, requestId: randomUUID(), say, name, dbUrl: target.url });
     if (typeof code === 'number') process.exitCode = code;
   } catch (e) {
