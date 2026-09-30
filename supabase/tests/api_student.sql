@@ -685,12 +685,14 @@ begin
   raise notice 'PASS api_create_item_draft: draft/hidden/with_finder/student row, zone resolved, photo slots, device upsert';
 end $$;
 
--- draft refusals
+-- draft refusals, and F-102 text canonicalization
 do $$
 declare
   v_d1 constant bytea := decode('01' || repeat('d1', 32), 'hex');
   v_d3 constant bytea := decode('01' || repeat('d3', 32), 'hex');
+  v_d6 constant bytea := decode('01' || repeat('d6', 32), 'hex');
   v_w constant uuid := '0a0a0a0a-1000-4000-8000-000000000001';
+  v jsonb;
   v_fmt constant text := 'select public.api_create_item_draft(p_school_code => %L, p_device_digest => %L::bytea, '
     || 'p_category => %L, p_description => %L, p_note => %L, p_map_version_id => %L::uuid, p_pin_x => %s, '
     || 'p_pin_y => %s, p_dropoff_location_id => %L::uuid, p_photo_count => %s, p_src => %L)';
@@ -708,7 +710,7 @@ begin
                                'invalid_input', 'description');
   perform pg_temp.expect_error(format(v_fmt, 'FCHS', v_d1, 'bottle', repeat('x', 121), null, null, 'null', 'null', v_w, 1, null),
                                'invalid_input', 'description');
-  perform pg_temp.expect_error(format(v_fmt, 'FCHS', v_d1, 'bottle', E'Green ‮lunchbox', null, null, 'null', 'null', v_w, 1, null),
+  perform pg_temp.expect_error(format(v_fmt, 'FCHS', v_d1, 'bottle', 'Green ' || chr(8238) || 'lunchbox', null, null, 'null', 'null', v_w, 1, null),
                                'invalid_input', 'description');
   perform pg_temp.expect_error(format(v_fmt, 'FCHS', v_d1, 'bottle', 'Green lunchbox', repeat('n', 81), null, 'null', 'null', v_w, 1, null),
                                'invalid_input', 'note');
@@ -730,8 +732,20 @@ begin
                                'invalid_input', 'src');
   perform pg_temp.expect_error(format(v_fmt, 'FCHS', '\x01d1', 'bottle', 'Green lunchbox', null, null, 'null', 'null', v_w, 1, null),
                                'invalid_input', 'device_digest');
+  perform pg_temp.expect_error(format(v_fmt, 'FCHS', v_d1, 'bottle', 'Green ' || chr(8294) || 'lunchbox', null, null, 'null', 'null',
+                                      v_w, 1, null), 'invalid_input', 'description');  -- bidi isolate
+  perform pg_temp.expect_error(format(v_fmt, 'FCHS', v_d1, 'bottle', 'Green lunchbox', 'Room ' || chr(7) || '214', null, 'null', 'null',
+                                      v_w, 1, null), 'invalid_input', 'note');  -- C0 control
+  -- decomposed a + combining acute, a tab and a double space: stored NFC-composed and whitespace-collapsed
+  v := public.api_create_item_draft(p_school_code => 'FCHS', p_device_digest => v_d6, p_category => 'book',
+                                    p_description => 'L' || chr(97) || chr(769) || 'piz ' || chr(9) || ' rojo',
+                                    p_dropoff_location_id => v_w, p_photo_count => 1);
   reset role;
-  raise notice 'PASS api_create_item_draft refusals: blocked device, high-value/unknown category, disabled flag, text, pin, map, dropoff, photo count, src, digest';
+  if (select i.description from public.items i where i.id = (v->>'itemId')::uuid) <> 'L' || chr(225) || 'piz rojo' then
+    raise exception 'FAIL description must be stored NFC-normalized with collapsed whitespace: %',
+      (select i.description from public.items i where i.id = (v->>'itemId')::uuid);
+  end if;
+  raise notice 'PASS api_create_item_draft refusals: blocked device, high-value/unknown category, disabled flag, text, controls, pin, map, dropoff, photo count, src, digest; NFC storage';
 end $$;
 
 -- complete (and idempotent re-complete)
