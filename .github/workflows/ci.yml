@@ -35,8 +35,9 @@ jobs:
       - run: npm ci
       - name: generate Next.js route types
         run: |
-          (cd apps/web && npx next typegen)
-          (cd apps/worker && npx next typegen)
+          for app in apps/web apps/worker; do
+            if [ -d "$app/app" ]; then (cd "$app" && npx next typegen); fi
+          done
       - run: npm run typecheck
       - run: npm test
 

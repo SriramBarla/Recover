@@ -2,13 +2,17 @@
 // Runs every supabase/tests/*.sql file against the local database with psql (ON_ERROR_STOP).
 // Each test file wraps itself in begin/rollback and raises on failure (18-Testing.md, SQL assertions).
 import { spawnSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 const dbUrl = process.env.DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:55422/postgres';
 const dir = path.join(root, 'supabase/tests');
 const only = process.argv.slice(2);
+if (!existsSync(dir)) {
+  console.log('sql-tests: no supabase/tests directory yet; nothing to run');
+  process.exit(0);
+}
 const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).filter((f) => !only.length || only.some((o) => f.includes(o))).sort();
 
 let failed = 0;
