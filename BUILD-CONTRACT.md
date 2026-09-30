@@ -49,7 +49,11 @@ Owner decisions of 2026-09-30:
 | A-student | `apps/web/app/s/**`; `apps/web/app/api/s/**`; `apps/web/app/api/search-all/**`; `apps/web/app/api/client-error/**`; `apps/web/app/offline/**`; `apps/web/app/page.tsx`; `apps/web/lib/{device,guard,idempotency,ratelimit,cache,storage-url,http}.ts`; `apps/web/components/student/**`; `apps/web/public/**` |
 | A-staff | `apps/web/app/staff/**`; `apps/web/app/district/**`; `apps/web/app/api/staff/**`; `apps/web/app/api/district/**`; `apps/web/app/api/auth/**`; `apps/web/app/api/internal/**`; `apps/web/auth.ts`; `apps/web/lib/{staff,session,ops}.ts`; `apps/web/components/staff/**` |
 | A-sql-student | `supabase/migrations/0200_api_student.sql`; `supabase/tests/api_student.sql` |
-| A-sql-staff | `supabase/migrations/0300_api_staff.sql`; `supabase/migrations/0310_api_district.sql`; `supabase/tests/api_staff.sql` |
+| A-sql-staff | `supabase/migrations/0300_api_staff.sql`; `supabase/tests/api_staff.sql` (item, custody, review, device, ticket and lost-report functions of 6.2 plus bind/resolve) |
+| A-sql-admin | `supabase/migrations/0305_api_staff_admin.sql`; `supabase/tests/api_staff_admin.sql` (roster, locations, pins, map versions, drafts, zones, submit, config, calendar, stats, audit of 6.2) |
+| A-sql-district | `supabase/migrations/0310_api_district.sql`; `supabase/tests/api_district.sql` (every function in 6.3) |
+| A-ops | `RUNBOOK.md`; `scripts/{switch,rotate-db-password,rotate-assertion-key,restore-quarantine,jobs,calendar-horizon,audit-privacy-sample,reconcile-orphans,qr-posters,load-synonyms}.mjs`; `tests/unit/ops-*.test.mjs` |
+| A-e2e | `tests/e2e/**`; `playwright.config.mjs` |
 | A-sql-system | `supabase/migrations/0400_system.sql`; `supabase/migrations/0450_cron.sql`; `supabase/tests/{system,privilege_diff,tenant_property,constraints}.sql` |
 
 ## 3. Decisions applied (resolving ANALYSIS.md gaps)
