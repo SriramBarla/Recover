@@ -33,6 +33,6 @@ export async function POST(req: Request): Promise<Response> {
     });
     return json({ uploads }, requestId);
   } catch (e) {
-    return failure(e, 'media.upload-spec', requestId);
+    return failure(e, 'POST /api/media/upload-spec', requestId);
   }
 }

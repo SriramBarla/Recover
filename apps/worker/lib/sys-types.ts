@@ -59,17 +59,5 @@ export type MapRow = {
 
 export type DraftToPurge = { itemId: string; schoolId: string; incomingPaths: string[] };
 
-export type MatchPair = {
-  reportId: string;
-  itemId: string;
-  lex: number;
-  sameCategory: boolean;
-  reportCategoryNull: boolean;
-  foundAt: string | null;
-  lostOn: string | null;
-  sameMapVersion: boolean;
-  dx: number | null;
-  dy: number | null;
-  mapWidth: number | null;
-  mapHeight: number | null;
-};
+// system_match_candidates_for_item / _for_report pairs, exactly as the shared scorer takes them.
+export type { MatchPair } from '@recover/shared/matcher.ts';

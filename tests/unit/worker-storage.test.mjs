@@ -14,7 +14,7 @@ function fakes(respond) {
   const signer = {
     presignPut: (i) => {
       signed.push({ presign: i });
-      return { url: `${i.endpoint}/${i.bucket}/${i.key}?X-Amz-Signature=sig`, expiresAt: new Date() };
+      return { url: `${i.endpoint}/${i.bucket}/${i.key}?X-Amz-Signature=sig`, expiresAt: new Date(Date.now() + i.expiresSeconds * 1000).toISOString() };
     },
     signRequest: (i) => {
       signed.push(i);
@@ -69,12 +69,14 @@ test('keys must start with a school uuid and never walk out of it; unknown bucke
   assert.equal(f.sent.length, 0, 'nothing was sent');
 });
 
-test('presignPut: allowed content types and TTLs only; expiresAt is an ISO time', () => {
+test('presignPut: content type is signed; allowed types and TTLs only; expiresAt is an ISO time', () => {
   const f = fakes(() => new Response(null));
   const p = f.storage.presignPut('incoming', KEY, 900, 'image/jpeg');
   assert.match(p.url, /X-Amz-Signature=/);
   assert.ok(Math.abs(Date.parse(p.expiresAt) - (Date.now() + 900_000)) < 5_000);
   assert.equal(f.signed[0].presign.expiresSeconds, 900);
+  assert.equal(f.signed[0].presign.contentType, 'image/jpeg', 'the incoming bucket requires an allowed Content-Type');
+  assert.equal(f.signed[0].presign.key, KEY);
   assert.throws(() => f.storage.presignPut('incoming', KEY, 900, 'text/html'), (e) => e instanceof PermanentError && e.code === 'content_type_refused');
   assert.throws(() => f.storage.presignPut('incoming', KEY, 0, 'image/jpeg'), PermanentError);
   assert.throws(() => f.storage.presignPut('incoming', '../x', 900, 'image/jpeg'), PermanentError);
@@ -97,8 +99,8 @@ test('ListObjectsV2: regex parser decodes entities and follows continuation toke
   assert.deepEqual(all.map((o) => o.key), [KEY, 'a&b', 'z']);
   const listCalls = f.signed.filter((s) => s.query);
   assert.deepEqual(listCalls.map((s) => [s.method, s.key, s.query['list-type'], s.query['continuation-token'] ?? null]), [
-    ['GET', '', '2', null],
-    ['GET', '', '2', 'tok<1>'],
+    ['GET', undefined, '2', null],
+    ['GET', undefined, '2', 'tok<1>'],
   ]);
   await assert.rejects(f.storage.list('incoming', '../'), PermanentError);
 });

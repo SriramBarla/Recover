@@ -24,7 +24,7 @@ export class PermanentError extends Error {
 
 export type Failure = { code: string; permanent: boolean; retryAfterS: number | null };
 
-const CODE = /^[a-z0-9_]{1,64}$/;
+const CODE = /^[a-z0-9_]{1,60}$/; // jobs.last_error_code <= 60
 const safeCode = (c: string): string => (CODE.test(c) ? c : 'unexpected');
 
 // PublicError codes from private.fail() that can clear on their own; every other one means the job's

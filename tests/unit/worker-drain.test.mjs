@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { PublicError } from '@recover/shared/errors.ts';
+import { log as sharedLog } from '@recover/shared/log.ts';
 import { drain } from '../../apps/worker/lib/drain.ts';
 import { PermanentError, RetryableError, backoffSeconds, classify } from '../../apps/worker/lib/jobs/errors.ts';
 import { MEDIA_KINDS, OTHER_KINDS, REGISTRY } from '../../apps/worker/lib/jobs/registry.ts';
@@ -73,6 +74,25 @@ function deps(q, clk, registry, over = {}) {
 
 const job = (fn) => ({ kind: 'x', run: fn });
 
+// Runs every log call through the real shared scrubber and keeps the JSON lines it writes.
+function scrubbedLog() {
+  const lines = [];
+  const fn = (level, event, fields) => {
+    const stream = level === 'warn' || level === 'error' ? process.stderr : process.stdout;
+    const original = stream.write;
+    stream.write = (chunk) => {
+      lines.push(String(chunk));
+      return true;
+    };
+    try {
+      sharedLog(level, event, fields);
+    } finally {
+      stream.write = original;
+    }
+  };
+  return { lines, fn };
+}
+
 test('retry vs permanent: error classes map to system_job_fail with backoff or dead', async () => {
   const clk = clock();
   const registry = {
@@ -85,10 +105,11 @@ test('retry vs permanent: error classes map to system_job_fail with backoff or d
   };
   const kinds = ['retry', 'perm', 'boom', 'gone', 'busy', 'ok', 'mystery'];
   const q = queue(kinds.map((kind) => ({ kind })), clk);
-  const d = deps(q, clk, registry, { otherKinds: kinds });
+  const logs = scrubbedLog();
+  const d = deps(q, clk, registry, { otherKinds: kinds, log: logs.fn });
 
   const first = await drain(d);
-  assert.deepEqual({ ...first, durationMs: 0 }, { requeued: 2, reapedDead: 1, leased: 7, done: 1, retried: 3, dead: 3, stoppedBy: 'empty', durationMs: 0 });
+  assert.deepEqual({ ...first, durationMs: 0 }, { requeued: 2, reapedDead: 1, leased: 7, done: 1, retried: 3, dead: 3, failed: 6, stoppedBy: 'empty', durationMs: 0 });
   const by = Object.fromEntries(q.rows.map((r) => [r.kind, r]));
   assert.deepEqual([by.retry.status, by.retry.code], ['queued', 'provider_unavailable']);
   assert.ok(by.retry.retryAfterS >= 10 && by.retry.retryAfterS <= 12, `backoff ${by.retry.retryAfterS}`);
@@ -105,9 +126,13 @@ test('retry vs permanent: error classes map to system_job_fail with backoff or d
   assert.deepEqual([by.boom.status, by.boom.code], ['dead', 'unexpected'], 'second unexpected failure is dead');
   assert.ok(by.retry.retryAfterS >= 20 && by.retry.retryAfterS <= 24, 'backoff doubles');
 
-  const everything = JSON.stringify([q.calls, d.logs]);
+  const everything = JSON.stringify(q.calls) + logs.lines.join('');
   assert.equal(everything.includes('raw text'), false, 'error messages never reach the queue or logs');
   assert.equal(everything.includes('1/2/3/raw'), false);
+  const failedLines = logs.lines.map((l) => JSON.parse(l)).filter((l) => l.event === 'job_failed');
+  assert.equal(failedLines.length, 9);
+  assert.deepEqual(failedLines.find((l) => l.kind === 'perm').err, { error: 'PermanentError', code: 'decode_failed' }, 'errors log as class and code');
+  assert.deepEqual(failedLines.find((l) => l.kind === 'boom').err, { error: 'Error' }, 'no message');
 });
 
 test('a retryable failure on the last attempt is dead', async () => {

@@ -30,7 +30,7 @@ async function record(
 
 export async function run(p: Payload, ctx: JobCtx): Promise<void> {
   const itemId = uuidField(p, 'itemId');
-  const policyVersion = textField(p, 'policyVersion', /^[A-Za-z0-9._-]{1,32}$/);
+  const policyVersion = textField(p, 'policyVersion', /^[A-Za-z0-9._-]{1,20}$/); // screening_runs.policy_version <= 20
   // VISION_MODE=off: no provider, no budget, no run recorded; the item stays unscreened (G-40 sorts it first).
   if (ctx.vision.mode === 'off') return;
 

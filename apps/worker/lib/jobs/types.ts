@@ -3,12 +3,15 @@
 // it throws RetryableError or PermanentError, and the drain loop turns those into done/fail calls.
 import type { Args } from '@recover/shared/db.ts';
 import type { LeasedJob } from '@recover/shared/dto.ts';
-import type { LogFn } from '../log.ts';
+import type { LogLevel } from '@recover/shared/log.ts';
+import type { MatchPair } from '@recover/shared/matcher.ts';
 import type { Vision } from '../media/vision.ts';
 import type { Storage } from '../storage.ts';
-import type { MatchPair } from '../sys-types.ts';
 
 export type Sys = <T = unknown>(name: `system_${string}`, args?: Args) => Promise<T>;
+
+// The shape of @recover/shared/log.ts `log`, so tests can pass a collector.
+export type LogFn = (level: LogLevel, event: string, fields?: Record<string, unknown>) => void;
 
 export type Matcher = {
   score(pair: MatchPair): { score: number; features: Record<string, unknown> };
@@ -20,7 +23,7 @@ export type JobCtx = {
   sys: Sys;
   storage: Storage;
   vision: Vision;
-  matcher: Matcher; // injected so job modules never load packages/shared/src/matcher.ts in tests
+  matcher: Matcher; // the shared scorer in production (runtime.ts); tests inject their own
   log: LogFn;
   deadline: number; // epoch ms: the invocation must be wrapping up by then; loops stop starting units
   workerId: string;

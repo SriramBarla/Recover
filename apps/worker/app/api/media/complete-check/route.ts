@@ -58,6 +58,6 @@ export async function POST(req: Request): Promise<Response> {
     );
     return json({ objects }, requestId);
   } catch (e) {
-    return failure(e, 'media.complete-check', requestId);
+    return failure(e, 'POST /api/media/complete-check', requestId);
   }
 }

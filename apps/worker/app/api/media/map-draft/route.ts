@@ -32,6 +32,6 @@ export async function POST(req: Request): Promise<Response> {
     const signed = storage().presignPut('map_drafts', key, UPLOAD_TTL_S, contentType);
     return json({ url: signed.url, expiresAt: signed.expiresAt, contentType }, requestId);
   } catch (e) {
-    return failure(e, 'media.map-draft', requestId);
+    return failure(e, 'POST /api/media/map-draft', requestId);
   }
 }

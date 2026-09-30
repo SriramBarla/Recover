@@ -3,10 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "plugins": [{ "name": "next" }],
-    "paths": {
-      "@/*": ["./*"],
-      "@recover/shared/*": ["../../packages/shared/src/*", "./types/contract/*"]
-    }
+    "paths": { "@/*": ["./*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

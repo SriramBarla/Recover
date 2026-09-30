@@ -58,6 +58,6 @@ export async function POST(req: Request): Promise<Response> {
     }
     return json(result ?? { ok: true }, requestId);
   } catch (e) {
-    return failure(e, 'media.map-activate', requestId);
+    return failure(e, 'POST /api/media/map-activate', requestId);
   }
 }

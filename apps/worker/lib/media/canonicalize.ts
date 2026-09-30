@@ -8,7 +8,8 @@ import { PermanentError } from '../jobs/errors.ts';
 export const CANONICAL_EDGE = 1600;
 export const REVIEW_EDGE = 800; // G-28
 export const MAP_EDGE = 2400;
-// item_photos.bytes stays within 1 MiB (G-38): quality steps down only for pathological (noise-like) input.
+// "Bounded quality/size" (§9.3 step 4): a canonical stays within 1 MiB, the same bound as the raw
+// upload; quality steps down only for pathological (noise-like) input.
 export const MAX_CANONICAL_BYTES = 1_048_576;
 export const MAX_MAP_BYTES = 4_000_000; // storage-wide 4 MB upload limit (§9.1)
 

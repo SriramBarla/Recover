@@ -4,10 +4,9 @@
 // at-least-once: a lost done/fail leaves the lease to expire and the job to be reaped and replayed,
 // which is safe because every job module is idempotent.
 import type { LeasedJob } from '@recover/shared/dto.ts';
-import { errorClass, type LogFn } from './log.ts';
 import { PermanentError, backoffSeconds, classify } from './jobs/errors.ts';
 import { LEASE_SECONDS, MEDIA_KINDS, OTHER_KINDS } from './jobs/registry.ts';
-import type { JobCtx, JobModule, Sys } from './jobs/types.ts';
+import type { JobCtx, JobModule, LogFn, Sys } from './jobs/types.ts';
 
 export const BUDGET_MS = 50_000; // no new lease after this
 export const DEADLINE_MS = 57_000; // ctx.deadline: work must be wrapping up (route maxDuration is 60 s)
@@ -33,6 +32,7 @@ export type DrainResult = {
   done: number;
   retried: number;
   dead: number;
+  failed: number; // retried + dead (scripts/dev.mjs logs done + failed)
   stoppedBy: 'empty' | 'budget' | 'error';
   durationMs: number;
 };
@@ -60,12 +60,13 @@ async function runOne(d: DrainDeps, job: LeasedJob, deadline: number, random: ()
     const permanent = f.permanent || job.attempts >= job.maxAttempts;
     const retryAfterS = permanent ? 0 : backoffSeconds(job.attempts, f.retryAfterS, random);
     await d.sys('system_job_fail', { p_job_id: job.id, p_error_code: f.code, p_retry_after_s: retryAfterS, p_permanent: permanent });
+    // The shared scrubber reduces an Error to its class and a code-shaped `code`, never the message.
     d.log(permanent ? 'error' : 'warn', 'job_failed', {
       jobId: job.id,
       kind: job.kind,
       attempts: job.attempts,
       code: f.code,
-      errorClass: errorClass(e),
+      err: e,
       permanent,
       retryAfterS,
     });
@@ -95,6 +96,7 @@ export async function drain(d: DrainDeps): Promise<DrainResult> {
     done: 0,
     retried: 0,
     dead: 0,
+    failed: 0,
     stoppedBy: 'budget',
     durationMs: 0,
   };
@@ -111,8 +113,9 @@ export async function drain(d: DrainDeps): Promise<DrainResult> {
   } catch (e) {
     // Lease, done, or fail could not reach the database: stop; expired leases are reaped next time.
     r.stoppedBy = 'error';
-    d.log('error', 'drain_stopped', { errorClass: errorClass(e) });
+    d.log('error', 'drain_stopped', { err: e });
   }
+  r.failed = r.retried + r.dead;
   r.durationMs = now() - start;
   return r;
 }

@@ -1,7 +1,7 @@
 // S3 client for Supabase Storage over the shared SigV4 signer (§9.2, F-117; BUILD-CONTRACT.md section 11).
 // Path-style URLs; endpoint and region from the environment. This module checks key shape; callers
 // check the exact school/item prefix against DB ids through keys.ts before any call (F-75).
-// The signer is injected (runtime.ts wires @recover/shared/sigv4.ts) so tests never load it.
+// The signer is injected (runtime.ts wires @recover/shared/sigv4.ts) so tests can record requests.
 import type * as SigV4 from '@recover/shared/sigv4.ts';
 import { PermanentError, RetryableError } from './jobs/errors.ts';
 import type { Bucket } from './keys.ts';
@@ -104,7 +104,7 @@ export function createStorage(cfg: S3Config, signer: Signer, fetchImpl: FetchLik
   async function send(
     method: 'GET' | 'HEAD' | 'PUT' | 'DELETE',
     bucket: Bucket,
-    key: string,
+    key: string | undefined, // undefined for bucket-level requests (ListObjectsV2)
     opts: { query?: Record<string, string>; headers?: Record<string, string>; body?: Uint8Array } = {},
   ): Promise<Response> {
     const signed = signer.signRequest({ ...cfg, method, bucket, key, query: opts.query, headers: opts.headers, body: opts.body });
@@ -150,10 +150,10 @@ export function createStorage(cfg: S3Config, signer: Signer, fetchImpl: FetchLik
       checkTarget(bucket, key);
       if (!PUT_TYPES.has(contentType)) throw new PermanentError('content_type_refused');
       if (!Number.isInteger(expiresSeconds) || expiresSeconds < 1 || expiresSeconds > 3600) throw new PermanentError('invalid_ttl');
-      // The contract presigner signs host only, so Content-Type is not bound into the URL; the bucket
-      // MIME allowlist and canonicalization re-check what actually arrives (§9.1, §9.3).
-      const { url } = signer.presignPut({ ...cfg, bucket, key, expiresSeconds });
-      return { url, expiresAt: new Date(Date.now() + expiresSeconds * 1000).toISOString() };
+      // Content-Type is a signed header: the browser must send exactly this type, and the bucket MIME
+      // allowlist refuses uploads without an allowed one. Canonicalization re-checks the bytes (§9.3).
+      const { url, expiresAt } = signer.presignPut({ ...cfg, bucket, key, expiresSeconds, contentType });
+      return { url, expiresAt };
     },
 
     get,
@@ -200,8 +200,7 @@ export function createStorage(cfg: S3Config, signer: Signer, fetchImpl: FetchLik
         const query: Record<string, string> = { 'list-type': '2', 'max-keys': String(Math.min(1000, limit)) };
         if (prefix) query.prefix = prefix;
         if (token) query['continuation-token'] = token;
-        // Bucket-level request: the signer is given an empty key (section 11 path-style).
-        const res = await send('GET', bucket, '', { query });
+        const res = await send('GET', bucket, undefined, { query }); // bucket-level: `/{bucket}?list-type=2`
         if (res.status !== 200) return unexpected(res);
         const page = parseListPage(await res.text());
         out.push(...page.objects);

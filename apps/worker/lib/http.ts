@@ -3,10 +3,10 @@
 // and provider failures become upstream_unavailable, and anything else is `internal`.
 import { randomUUID } from 'node:crypto';
 import { PublicError, errorResponse } from '@recover/shared/errors.ts';
+import { errorSignature, log } from '@recover/shared/log.ts';
 import { recordError } from './db.ts';
 import { PermanentError, RetryableError } from './jobs/errors.ts';
 import { UUID_RE } from './keys.ts';
-import { errorClass, log } from './log.ts';
 
 export function requireUuid(v: unknown, field: string): string {
   if (typeof v !== 'string' || !UUID_RE.test(v.toLowerCase())) throw new PublicError('invalid_input', field);
@@ -51,13 +51,14 @@ export function json(data: unknown, requestId: string, status = 200): Response {
   });
 }
 
+// `route` is the route template, for example `POST /api/media/upload-spec` (G-29 signature input).
 export async function failure(e: unknown, route: string, requestId: string): Promise<Response> {
   let pe: PublicError;
   if (e instanceof PublicError) pe = e;
   else if (e instanceof RetryableError || (e instanceof PermanentError && e.code.startsWith('storage_'))) pe = new PublicError('upstream_unavailable');
   else pe = new PublicError('internal');
   const code = e instanceof RetryableError || e instanceof PermanentError ? e.code : pe.code;
-  log(pe.status >= 500 ? 'error' : 'warn', 'route_failed', { route, requestId, status: pe.status, code, errorClass: errorClass(e) });
-  if (pe.code === 'internal') await recordError(`worker:${route}:${errorClass(e)}`);
+  log(pe.status >= 500 ? 'error' : 'warn', 'route_failed', { route, requestId, status: pe.status, code, err: e });
+  if (pe.code === 'internal') await recordError(errorSignature(`worker ${route}`, e));
   return errorResponse(pe, requestId);
 }

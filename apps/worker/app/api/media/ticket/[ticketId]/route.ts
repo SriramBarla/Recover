@@ -65,6 +65,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ ticketId
     if (len && /^\d+$/.test(len)) headers['content-length'] = len;
     return new Response(res.body, { status: 200, headers });
   } catch (e) {
-    return failure(e, 'media.ticket', requestId);
+    return failure(e, 'GET /api/media/ticket/[ticketId]', requestId);
   }
 }

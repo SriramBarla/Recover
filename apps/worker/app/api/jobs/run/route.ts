@@ -5,7 +5,7 @@ import { sys } from '@/lib/db.ts';
 import { drain } from '@/lib/drain.ts';
 import { failure, json, requestIdFor } from '@/lib/http.ts';
 import { REGISTRY } from '@/lib/jobs/registry.ts';
-import { log } from '@/lib/log.ts';
+import { log } from '@recover/shared/log.ts';
 import { WORKER_ID, ctxFactory } from '@/lib/runtime.ts';
 
 export const runtime = 'nodejs';
@@ -19,6 +19,6 @@ export async function POST(req: Request): Promise<Response> {
     const result = await drain({ sys, registry: REGISTRY, ctxFor: ctxFactory(req), log, workerId: WORKER_ID });
     return json(result, requestId, result.stoppedBy === 'error' ? 503 : 200);
   } catch (e) {
-    return failure(e, 'jobs.run', requestId);
+    return failure(e, 'POST /api/jobs/run', requestId);
   }
 }

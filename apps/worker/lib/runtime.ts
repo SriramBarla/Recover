@@ -7,7 +7,7 @@ import { presignPut, signRequest } from '@recover/shared/sigv4.ts';
 import { sys } from './db.ts';
 import { gcpEnv, s3Env, visionMockFlag, visionMode } from './env.ts';
 import type { JobCtx, Matcher } from './jobs/types.ts';
-import { log } from './log.ts';
+import { log } from '@recover/shared/log.ts';
 import { createVision, type Vision } from './media/vision.ts';
 import { createStorage, type Storage } from './storage.ts';
 

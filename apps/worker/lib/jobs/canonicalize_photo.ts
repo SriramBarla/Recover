@@ -54,8 +54,12 @@ export async function run(p: Payload, ctx: JobCtx): Promise<void> {
     });
     bytes = c.jpeg.length;
   } catch (e) {
-    // A stable failure code only; the item stays non-public and the office route handles it (§9.3).
-    if (e instanceof PermanentError) await ctx.sys('system_photo_failed', { p_photo_id: photo.photoId, p_failure_code: e.code });
+    // A stable failure code only (item_photos.failure_code is ^[a-z_]{2,40}$); the item stays
+    // non-public and the office route handles it (§9.3).
+    if (e instanceof PermanentError) {
+      const code = /^[a-z_]{2,40}$/.test(e.code) ? e.code : 'failed';
+      await ctx.sys('system_photo_failed', { p_photo_id: photo.photoId, p_failure_code: code });
+    }
     throw e;
   }
   ctx.log('info', 'photo_canonical', { jobId: ctx.job.id, bytes });
