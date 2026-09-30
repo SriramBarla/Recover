@@ -86,16 +86,18 @@ The whole v1 app is merged and runs end to end on the local stack. Deployment ne
 | Area | Pull requests | Verified by |
 |---|---|---|
 | Foundation, build contract, dev tooling, CI, deploy docs | #1-#7, #9 | CI on every PR |
-| Database schema, roles, RLS, private helpers | #2, #12 | 8/8 SQL suites on a fresh reset: privilege diff, 156 cross-school attempts rejected, every CHECK tested |
+| Database schema, roles, RLS, private helpers | #2, #12 | SQL suites on a fresh reset: privilege diff, 156 cross-school attempts rejected, every CHECK tested |
 | Shared modules (SigV4, Unicode, rate limits, logging, matcher) | #8 | 119 unit tests; the AWS SigV4 vectors |
-| SQL functions: student, staff, school admin, district, system and cron | #10, #11, #15, #16, #18 | 20 + 221 + 159 + 101 + 565 SQL checks |
+| SQL functions: student, staff, school admin, district, system and cron | #10, #11, #15, #16, #18, #28 | 21 + 221 + 159 + 101 + 565 SQL checks |
 | Worker (job drain, media pipeline, screening, brokers) | #13 | 54 unit tests; live storage checks; empty 401 on unauthenticated probes |
 | Student PWA | #17 | JS 134-142 KB gzipped (budget 150 KB) |
 | Staff and district apps | #14 | 46 unit tests; assertion vector parity |
-| Ops runbooks and scripts (24 runbooks) | #20 | 36 unit tests; QR codes decode |
-| Browser E2E (Playwright) | #19 | 21/22 against the running stack |
+| Ops runbooks and scripts (24 runbooks) | #20, #25 | 48 unit tests; QR codes decode |
+| Browser E2E (Playwright) | #19 | 22/22 against the running stack |
 | Integration | #21 | end-to-end 15/15, from student post to verified deletion |
-| Design system and polish pass | `feat/design-system` | in progress |
+| Design system | #23, #24 | E2E 22/22; 320 px reflow; named links |
+| Security reviews: web/worker, database, ops | #25, #26, #27 | `security_review.sql` (32 checks); 311 unit tests; 9/9 SQL suites |
+| Design polish pass | `feat/design-polish` | in progress |
 
 **Local performance check** (production build, 200 concurrent readers for 30 s): p95 was feed 3 ms, search 8 ms, listing 2 ms, meta 155 ms, with 0 errors. The staging run of `scripts/load.mjs` is still to do.
 
