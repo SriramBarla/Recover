@@ -11,8 +11,20 @@ function optionalEnv(name: string): string | undefined {
 
 export const onVercel = (): boolean => Boolean(process.env.VERCEL);
 
-// Dev web->worker authentication is refused on Vercel no matter what the flags say (§9.3).
-export const devAuthEnabled = (): boolean => process.env.RECOVER_DEV_AUTH === '1' && !onVercel();
+// Dev web->worker authentication is refused on Vercel and in every production build (next build and
+// next start run with NODE_ENV=production, which Next also inlines at build time), no matter what the
+// flags say (§9.3). `next dev` keeps it.
+export const devAuthEnabled = (): boolean =>
+  process.env.RECOVER_DEV_AUTH === '1' && !onVercel() && process.env.NODE_ENV !== 'production';
+
+const DEV_FLAGS = ['RECOVER_DEV_LOGIN', 'RECOVER_DEV_AUTH'] as const;
+
+// Dev switches that are set in a production build and therefore ignored; instrumentation.ts logs
+// them once at startup so the misconfiguration is visible.
+export function ignoredDevFlags(): string[] {
+  if (process.env.NODE_ENV !== 'production') return [];
+  return DEV_FLAGS.filter((name) => Boolean(process.env[name]));
+}
 
 export type DbEnv = { url: string; ssl: 'require' | 'disable' };
 

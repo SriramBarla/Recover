@@ -58,7 +58,7 @@ test('scheduler bearer: sha256(bearer) must match SCHEDULER_BEARER_SHA256 (G-18)
   });
 });
 
-test('dev secret: constant-time match, only with RECOVER_DEV_AUTH=1 and never on Vercel', async () => {
+test('dev secret: constant-time match, only with RECOVER_DEV_AUTH=1, never on Vercel or in a production build', async () => {
   const secret = 'dev-secret-value';
   assert.equal(devSecretAuthorized(req({ 'x-recover-dev-secret': secret }), secret), true);
   assert.equal(devSecretAuthorized(req({ 'x-recover-dev-secret': `${secret}x` }), secret), false);
@@ -66,13 +66,17 @@ test('dev secret: constant-time match, only with RECOVER_DEV_AUTH=1 and never on
   assert.equal(devSecretAuthorized(req({ 'x-recover-dev-secret': secret }), ''), false);
   assert.equal(devSecretAuthorized(req({}), secret), false);
 
-  const env = { RECOVER_DEV_AUTH: '1', WORKER_DEV_SECRET: secret, VERCEL: undefined, WEB_OIDC_ISSUER: undefined };
+  const env = { RECOVER_DEV_AUTH: '1', WORKER_DEV_SECRET: secret, VERCEL: undefined, NODE_ENV: 'development', WEB_OIDC_ISSUER: undefined };
   await withEnv(env, async () => {
     assert.equal(await requireWeb(req({ 'x-recover-dev-secret': secret })), null);
     await assertEmpty401(await requireWeb(req({ 'x-recover-dev-secret': 'nope' })));
     await assertEmpty401(await requireWeb(req({})));
   });
   await withEnv({ ...env, VERCEL: '1' }, async () => {
+    await assertEmpty401(await requireWeb(req({ 'x-recover-dev-secret': secret })));
+  });
+  // security review L3: a production build off Vercel refuses the dev secret too
+  await withEnv({ ...env, NODE_ENV: 'production' }, async () => {
     await assertEmpty401(await requireWeb(req({ 'x-recover-dev-secret': secret })));
   });
   await withEnv({ ...env, RECOVER_DEV_AUTH: '0' }, async () => {
