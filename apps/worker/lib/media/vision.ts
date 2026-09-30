@@ -78,7 +78,7 @@ const NAME_STOPWORDS = new Set(
     'monday tuesday wednesday thursday friday saturday sunday'
   ).split(' '),
 );
-const CAPITALIZED = /^\p{Lu}\p{Ll}+(?:[-'’]\p{Lu}?\p{Ll}+)*$/u;
+const CAPITALIZED = /^\p{Lu}\p{Ll}+(?:[-'\u2019]\p{Lu}?\p{Ll}+)*$/u;
 
 function nameLike(text: string): boolean {
   const tokens = text.split(/\s+/).map((t) => t.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, ''));
