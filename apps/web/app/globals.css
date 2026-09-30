@@ -2052,6 +2052,14 @@ button.chip-sm {
   background: var(--brand-soft);
   box-shadow: inset 4px 0 0 var(--brand);
 }
+/* Cells in wide tables: an ID stays on one line; running text keeps a readable width. */
+.table .cell-id a,
+.table .cell-id .mono {
+  white-space: nowrap;
+}
+.table .cell-text {
+  min-width: 12rem;
+}
 .link-row {
   display: flex;
   flex-wrap: wrap;

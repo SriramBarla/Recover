@@ -116,7 +116,7 @@ export default async function ListingPage({ params }: Props) {
             How to claim it
           </h2>
           <p>
-            Go to {where} in person and give them the item ID <span className="mono">{item.publicId}</span>.
+            Go to {where} in person and give them the item ID <span className="mono nowrap">{item.publicId}</span>.
             {item.custody === 'with_finder' ? ' It may still be on its way there, so check the hours and try again later if needed.' : ''}
           </p>
           <p>

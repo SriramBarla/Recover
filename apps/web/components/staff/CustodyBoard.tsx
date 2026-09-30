@@ -91,7 +91,7 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
     });
 
   const idCell = (r: CustodyRow) => (
-    <td>
+    <td className="cell-id">
       <a href={`/staff/${code}/items/${r.id}`} className="mono">
         {r.publicId ?? 'Item'}
       </a>
@@ -181,7 +181,7 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
                 <tr key={r.id} aria-busy={busy.has(r.id)}>
                   {thumbCell(r)}
                   {idCell(r)}
-                  <td>{r.description ?? <span className="muted">None</span>}</td>
+                  <td className="cell-text">{r.description ?? <span className="muted">None</span>}</td>
                   <td>
                     <StatusBadge kind="custody" status="at_location" label={locName(r.locationId)} />
                     {r.receivedAt ? <div className="small muted">since {fmtDate(r.receivedAt, tz)}</div> : null}
@@ -318,11 +318,11 @@ function ExpectedRow({
     <tr aria-busy={busy}>
       {thumbCell}
       {idCell}
-      <td>
+      <td className="cell-text">
         {row.description ?? <span className="muted">None</span>}
         <div className="small muted">Bringing it to {locName(row.locationId)}</div>
       </td>
-      <td>{fmtDate(row.postedAt, tz)}</td>
+      <td className="nowrap">{fmtDate(row.postedAt, tz)}</td>
       <td>
         {row.deadlineAt ? fmtDateTime(row.deadlineAt, tz) : <span className="muted">Not set</span>}
         {late ? (

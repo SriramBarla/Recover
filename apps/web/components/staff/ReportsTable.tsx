@@ -80,7 +80,7 @@ export function ReportsTable({ code, reports, can, activeMap, tz }: Props) {
                   <span className="muted">Any</span>
                 )}
               </td>
-              <td>{r.description ?? <span className="muted">Cleared</span>}</td>
+              <td className="cell-text">{r.description ?? <span className="muted">Cleared</span>}</td>
               <td>
                 <ItemPin code={code} pin={r.pin} mapVersionId={r.mapVersionId} activeMap={activeMap} canReadMaps={can.readMaps} label="Reported loss location" />
               </td>
