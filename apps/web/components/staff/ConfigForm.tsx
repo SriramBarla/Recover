@@ -3,6 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STUDENT_CATEGORIES } from '@recover/shared/dto.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { CategoryIcon } from '@/components/ui/category.tsx';
+import { Fieldset, TextInput } from '@/components/ui/field.tsx';
+import { IconSliders } from '@/components/ui/icons.tsx';
+import { LiveRegion } from '@/components/ui/live-region.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
 import { ConfirmButton } from './ConfirmButton.tsx';
 import { staffApi } from './client-api.ts';
 import { categoryLabel } from './format.ts';
@@ -36,62 +42,82 @@ export function ConfigForm({ code, config }: Props) {
   const ceiling = config.retentionCeiling ?? 365;
   const retentionOk = retention >= floor && retention <= ceiling;
 
-  const globalOff = (v: boolean | null) => (v === false ? <span className="badge badge-warn">Off district-wide</span> : null);
+  const globalOff = (v: boolean | null) => (v === false ? <Badge tone="warn">Off district-wide</Badge> : null);
+  const range = `District range: ${floor} to ${ceiling} days.`;
 
   return (
-    <div className="card stack-lg">
-      <h2>Settings</h2>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">Student features</legend>
-        <label className="row">
-          <input type="checkbox" checked={studentPosting} onChange={(e) => setStudentPosting(e.target.checked)} />
-          Students can post found items {globalOff(config.globalStudentPosting)}
-        </label>
-        <p className="hint" style={{ margin: 0 }}>Keep this off for the first two weeks while staff post and students browse.</p>
-        <label className="row">
-          <input type="checkbox" checked={lostReports} onChange={(e) => setLostReports(e.target.checked)} />
-          Students can file lost reports {globalOff(config.globalLostReports)}
-        </label>
-        <label className="row">
-          <input type="checkbox" checked={crossSchool} onChange={(e) => setCrossSchool(e.target.checked)} />
-          Include this school in cross-school search {globalOff(config.globalCrossSchoolSearch)}
-        </label>
-      </fieldset>
-      <div className="grid">
-        <label className="field">
-          <span className="label">Retention after check-in (days)</span>
-          <input className="input" type="number" min={floor} max={ceiling} value={retention} onChange={(e) => setRetention(Number(e.target.value))} aria-invalid={!retentionOk} />
-          <span className={retentionOk ? 'hint' : 'field-error'}>
-            District range: {floor} to {ceiling} days.
+    <section className="card card-pad-lg stack-lg" aria-labelledby="settings-h">
+      <h2 id="settings-h" className="with-icon">
+        <IconSliders />
+        Settings
+      </h2>
+      <Fieldset id="cfg-features" legend="Student features">
+        <label className="choice">
+          <input type="checkbox" checked={studentPosting} onChange={(e) => setStudentPosting(e.target.checked)} aria-describedby="cfg-posting-hint" />
+          <span>
+            Students can post found items {globalOff(config.globalStudentPosting)}
           </span>
         </label>
-        <label className="field">
-          <span className="label">School days to drop off</span>
-          <input className="input" type="number" min={1} max={10} value={neverArrived} onChange={(e) => setNeverArrived(Number(e.target.value))} />
-          <span className="hint">1 means by the end of the next school day.</span>
+        <p className="hint choice-hint" id="cfg-posting-hint">
+          Keep this off for the first two weeks while staff post and students browse.
+        </p>
+        <label className="choice">
+          <input type="checkbox" checked={lostReports} onChange={(e) => setLostReports(e.target.checked)} />
+          <span>
+            Students can file lost reports {globalOff(config.globalLostReports)}
+          </span>
         </label>
+        <label className="choice">
+          <input type="checkbox" checked={crossSchool} onChange={(e) => setCrossSchool(e.target.checked)} />
+          <span>
+            Include this school in cross-school search {globalOff(config.globalCrossSchoolSearch)}
+          </span>
+        </label>
+      </Fieldset>
+      <div className="grid-wide">
+        <TextInput
+          id="cfg-retention"
+          label="Retention after check-in (days)"
+          type="number"
+          inputMode="numeric"
+          min={floor}
+          max={ceiling}
+          value={retention}
+          onChange={(e) => setRetention(Number(e.target.value))}
+          hint={retentionOk ? range : undefined}
+          error={retentionOk ? undefined : range}
+          className="input-number"
+        />
+        <TextInput
+          id="cfg-never-arrived"
+          label="School days to drop off"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={10}
+          value={neverArrived}
+          onChange={(e) => setNeverArrived(Number(e.target.value))}
+          hint="1 means by the end of the next school day."
+          className="input-number"
+        />
       </div>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">Categories students can post</legend>
-        <div className="grid">
-          {STUDENT_CATEGORIES.map((c) => (
-            <label key={c} className="row">
-              <input
-                type="checkbox"
-                checked={categories.includes(c)}
-                onChange={(e) => setCategories((prev) => (e.target.checked ? [...prev, c] : prev.filter((x) => x !== c)))}
-              />
+      <Fieldset id="cfg-categories" legend="Categories students can post" hint="Phones, wallets, keys, IDs, and medication always go straight to the office." bodyClassName="choice-grid">
+        {STUDENT_CATEGORIES.map((c) => (
+          <label key={c} className="choice">
+            <input
+              type="checkbox"
+              checked={categories.includes(c)}
+              onChange={(e) => setCategories((prev) => (e.target.checked ? [...prev, c] : prev.filter((x) => x !== c)))}
+            />
+            <span className="with-icon">
+              <CategoryIcon category={c} size={18} />
               {categoryLabel(c)}
-            </label>
-          ))}
-        </div>
-        <p className="hint" style={{ margin: 0 }}>Phones, wallets, keys, IDs, and medication always go straight to the office.</p>
-      </fieldset>
-      {saved ? (
-        <div className="notice notice-ok" role="status">
-          {saved}
-        </div>
-      ) : null}
+            </span>
+          </label>
+        ))}
+      </Fieldset>
+      <LiveRegion message={saved} />
+      {saved ? <Notice tone="success">{saved}</Notice> : null}
       <ConfirmButton
         label="Save settings"
         prompt={`Save ${Object.keys(changes).length} change${Object.keys(changes).length === 1 ? '' : 's'}? Settings changes need a recent sign-in.`}
@@ -103,6 +129,6 @@ export function ConfigForm({ code, config }: Props) {
           router.refresh();
         }}
       />
-    </div>
+    </section>
   );
 }

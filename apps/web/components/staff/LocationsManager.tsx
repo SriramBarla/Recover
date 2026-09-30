@@ -2,10 +2,18 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconAlert, IconBuilding, IconCheck, IconMapPin, IconPencil, IconPlus, IconX } from '@/components/ui/icons.tsx';
+import type { MapPoint as Point } from '@/components/ui/map-geometry.ts';
+import { MapPicker } from '@/components/ui/map-picker.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
+import { Table } from '@/components/ui/table.tsx';
 import { ActionError } from './ActionError.tsx';
 import { staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
-import { MapCanvas, type Point } from './MapCanvas.tsx';
 import type { LocationRow, MapVersionRow } from './shapes.ts';
 
 type Props = { code: string; locations: LocationRow[]; versions: MapVersionRow[] };
@@ -48,53 +56,81 @@ export function LocationsManager({ code, locations, versions }: Props) {
     }
   };
 
+  const current = locations.find((l) => l.id === pinFor) ?? null;
+
   return (
     <div className="stack-lg">
       <p className="visually-hidden" role="status" aria-live="polite">
         {notice}
       </p>
-      {notice ? <div className="notice notice-ok">{notice}</div> : null}
+      {notice ? <Notice tone="success">{notice}</Notice> : null}
       <section className="stack" aria-labelledby="loc-h">
         <div className="spread">
-          <h2 id="loc-h">Pickup locations</h2>
-          <button type="button" className="btn" onClick={() => setEditing('new')}>
+          <h2 id="loc-h" className="with-icon">
+            <IconBuilding />
+            Pickup locations
+          </h2>
+          <Button onClick={() => setEditing('new')} icon={<IconPlus />}>
             Add location
-          </button>
+          </Button>
         </div>
         {editing === 'new' ? <LocationForm code={code} onDone={(msg) => { setEditing(null); setNotice(msg); router.refresh(); }} onCancel={() => setEditing(null)} /> : null}
         {locations.length === 0 ? (
           <p className="muted">No locations yet.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">Code</th>
-                  <th scope="col">Name</th>
-                  <th scope="col">Hours</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Pin on selected map</th>
-                  <th scope="col">Edit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {locations.map((l) => (
+          <Table caption="Pickup locations" hideCaption>
+            <thead>
+              <tr>
+                <th scope="col">Code</th>
+                <th scope="col">Name</th>
+                <th scope="col">Hours</th>
+                <th scope="col">Status</th>
+                <th scope="col">Pin on selected map</th>
+                <th scope="col">Edit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {locations.map((l) => {
+                const pinned = version ? pinOn(l, version) !== null : false;
+                return (
                   <tr key={l.id}>
                     <td className="mono">{l.code}</td>
                     <td>{l.name}</td>
                     <td className="small">{l.hours ?? <span className="muted">Not set</span>}</td>
-                    <td>{l.active ? <span className="badge badge-ok">Active</span> : <span className="badge">Inactive</span>}</td>
-                    <td>{version ? (pinOn(l, version) ? <span className="badge badge-ok">Pinned</span> : <span className={l.active ? 'badge badge-warn' : 'badge'}>No pin</span>) : '-'}</td>
                     <td>
-                      <button type="button" className="btn btn-ghost" onClick={() => setEditing(l)}>
+                      {l.active ? (
+                        <Badge tone="ok" icon={<IconCheck />}>
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge icon={<IconX />}>Inactive</Badge>
+                      )}
+                    </td>
+                    <td>
+                      {version ? (
+                        pinned ? (
+                          <Badge tone="ok" icon={<IconMapPin />}>
+                            Pinned
+                          </Badge>
+                        ) : (
+                          <Badge tone={l.active ? 'warn' : 'neutral'} icon={<IconAlert />}>
+                            No pin
+                          </Badge>
+                        )
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                    <td>
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(l)} icon={<IconPencil />}>
                         Edit
-                      </button>
+                      </Button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </Table>
         )}
         {editing && editing !== 'new' ? (
           <LocationForm key={editing.id} code={code} location={editing} onDone={(msg) => { setEditing(null); setNotice(msg); router.refresh(); }} onCancel={() => setEditing(null)} />
@@ -102,57 +138,69 @@ export function LocationsManager({ code, locations, versions }: Props) {
       </section>
 
       <section className="stack" aria-labelledby="pins-h">
-        <h2 id="pins-h">Location pins</h2>
+        <h2 id="pins-h" className="with-icon">
+          <IconMapPin />
+          Location pins
+        </h2>
         {pinnable.length === 0 ? (
           <p className="muted">Create a draft map on the Map page first.</p>
         ) : (
           <>
-            <div className="grid">
-              <label className="field">
-                <span className="label">Map version</span>
-                <select className="select" value={versionId} onChange={(e) => { setVersionId(e.target.value); setPicked(null); }}>
-                  {pinnable.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.active ? 'Active map' : v.approvalStatus === 'draft' ? 'Draft' : 'Waiting for district'} ({v.id.slice(0, 8)})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span className="label">Location to pin</span>
-                <select className="select" value={pinFor} onChange={(e) => { setPinFor(e.target.value); setPicked(null); }}>
-                  {locations
-                    .filter((l) => l.active)
-                    .map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
+            <div className="grid-wide">
+              <Select
+                id="pin-version"
+                label="Map version"
+                value={versionId}
+                onChange={(e) => {
+                  setVersionId(e.target.value);
+                  setPicked(null);
+                }}
+                options={pinnable.map((v) => ({
+                  value: v.id,
+                  label: `${v.active ? 'Active map' : v.approvalStatus === 'draft' ? 'Draft' : 'Waiting for district'} (${v.id.slice(0, 8)})`,
+                }))}
+              />
+              <Select
+                id="pin-location"
+                label="Location to pin"
+                value={pinFor}
+                onChange={(e) => {
+                  setPinFor(e.target.value);
+                  setPicked(null);
+                }}
+                options={locations.filter((l) => l.active).map((l) => ({ value: l.id, label: l.name }))}
+              />
             </div>
             {version ? (
-              <MapCanvas
-                src={version.width !== null ? `/api/staff/${code}/maps/${version.id}/image` : null}
-                alt="Campus map"
-                width={version.width}
-                height={version.height}
-                markers={locations
-                  .filter((l) => l.active && l.id !== pinFor)
-                  .flatMap((l) => {
-                    const p = pinOn(l, version);
-                    return p ? [{ id: l.id, x: p.x, y: p.y, label: l.name }] : [];
-                  })}
-                picked={picked ?? (locations.find((l) => l.id === pinFor) ? pinOn(locations.find((l) => l.id === pinFor)!, version) : null)}
-                onPick={setPicked}
-                pickLabel="location pin"
-                maxWidth="48rem"
-              />
+              version.width !== null ? (
+                <div style={{ maxWidth: '48rem' }}>
+                  <MapPicker
+                    src={`/api/staff/${code}/maps/${version.id}/image`}
+                    width={version.width}
+                    height={version.height}
+                    label="Campus map. Choose a location pin location."
+                    help="Click the map, or focus it and use the arrow keys (Shift for bigger steps) then Enter. You can also type the position below."
+                    markers={locations
+                      .filter((l) => l.active && l.id !== pinFor)
+                      .flatMap((l) => {
+                        const p = pinOn(l, version);
+                        return p ? [{ id: l.id, x: p.x, y: p.y, label: l.name }] : [];
+                      })}
+                    value={picked ?? (current ? pinOn(current, version) : null)}
+                    onChange={(p) => setPicked(p)}
+                    coordinateInputs
+                    showCoordinates
+                    pointLabel="location pin"
+                  />
+                </div>
+              ) : (
+                <p className="muted small">No map image available.</p>
+              )
             ) : null}
             <div className="row">
-              <button type="button" className="btn btn-primary" disabled={!picked || !pinFor || pinBusy} onClick={() => void savePin()}>
+              <Button variant="primary" disabled={!picked || !pinFor || pinBusy} onClick={() => void savePin()} icon={<IconCheck />}>
                 {pinBusy ? 'Saving...' : 'Save pin'}
-              </button>
+              </Button>
             </div>
             <ActionError error={pinError} />
           </>
@@ -170,6 +218,7 @@ function LocationForm({ code, location, onDone, onCancel }: { code: string; loca
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const deactivating = location !== undefined && location.active && !active;
+  const formId = location ? `loc-${location.id}` : 'loc-new';
 
   const save = async () => {
     await staffApi(`/api/staff/${code}/locations`, {
@@ -196,23 +245,39 @@ function LocationForm({ code, location, onDone, onCancel }: { code: string; loca
     <form onSubmit={submit} className="card stack" aria-label={location ? `Edit ${location.name}` : 'New location'}>
       <h3>{location ? `Edit ${location.name}` : 'New location'}</h3>
       <div className="grid">
-        <label className="field">
-          <span className="label">Code</span>
-          <input className="input mono" required pattern="[A-Za-z0-9]{1,6}" maxLength={6} value={codeValue} onChange={(e) => setCodeValue(e.target.value.toUpperCase())} />
-          <span className="hint">1 to 6 letters or digits, used in item IDs.</span>
-        </label>
-        <label className="field">
-          <span className="label">Name</span>
-          <input className="input" required minLength={2} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="Front office" />
-        </label>
-        <label className="field">
-          <span className="label">Pickup hours</span>
-          <input className="input" maxLength={120} value={hours} onChange={(e) => setHours(e.target.value)} placeholder="Mon-Fri 7:30-3:30" />
-        </label>
+        <TextInput
+          id={`${formId}-code`}
+          label="Code"
+          hint="1 to 6 letters or digits, used in item IDs."
+          className="mono"
+          required
+          pattern="[A-Za-z0-9]{1,6}"
+          maxLength={6}
+          value={codeValue}
+          onChange={(e) => setCodeValue(e.target.value.toUpperCase())}
+        />
+        <TextInput
+          id={`${formId}-name`}
+          label="Name"
+          required
+          minLength={2}
+          maxLength={60}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Front office"
+        />
+        <TextInput
+          id={`${formId}-hours`}
+          label="Pickup hours"
+          maxLength={120}
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+          placeholder="Mon-Fri 7:30-3:30"
+        />
       </div>
-      <label className="row">
+      <label className="choice">
         <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-        Active (students can choose it as a drop-off)
+        <span>Active (students can choose it as a drop-off)</span>
       </label>
       <div className="row" style={{ alignItems: 'flex-start' }}>
         {deactivating ? (
@@ -224,13 +289,13 @@ function LocationForm({ code, location, onDone, onCancel }: { code: string; loca
             onConfirm={save}
           />
         ) : (
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <Button type="submit" variant="primary" disabled={busy} icon={<IconCheck />}>
             {busy ? 'Saving...' : 'Save'}
-          </button>
+          </Button>
         )}
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
       <ActionError error={error} />
     </form>

@@ -2,6 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconCalendar, IconUpload } from '@/components/ui/icons.tsx';
+import { LiveRegion } from '@/components/ui/live-region.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
 import { ActionError } from './ActionError.tsx';
 import { staffApi } from './client-api.ts';
 import { parseCalendarCsv, summarize, type CalendarRow } from './calendar-csv.ts';
@@ -56,45 +61,59 @@ export function CalendarUpload({ code, horizonDays, lastDay }: { code: string; h
   };
 
   const warn = horizonDays !== null && horizonDays < 45;
+  const coverage = horizonDays === null ? 'Calendar coverage is not reported yet.' : `Covered for the next ${horizonDays} days${lastDay ? ` (through ${lastDay})` : ''}.`;
 
   return (
-    <div className="card stack">
-      <h2>School calendar</h2>
-      <p className={warn ? 'notice notice-warn' : 'muted'} style={{ margin: 0 }}>
-        {horizonDays === null ? 'Calendar coverage is not reported yet.' : `Covered for the next ${horizonDays} days${lastDay ? ` (through ${lastDay})` : ''}.`}
-        {warn ? ' Upload more days: drop-off deadlines stop being computed when coverage runs out.' : ''}
-      </p>
-      <label className="field">
-        <span className="label">CSV file with columns day,is_open,open_at,close_at</span>
-        <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => void onFile(e.target.files?.[0])} />
-        <span className="hint">Example lines: 2026-10-01,true,07:45,15:30 and 2026-10-03,false,,</span>
-      </label>
+    <section className="card card-pad-lg stack" aria-labelledby="calendar-h">
+      <h2 id="calendar-h" className="with-icon">
+        <IconCalendar />
+        School calendar
+      </h2>
+      {warn ? (
+        <Notice tone="warning">
+          <p>
+            {coverage} Upload more days: drop-off deadlines stop being computed when coverage runs out.
+          </p>
+        </Notice>
+      ) : (
+        <p className="muted">{coverage}</p>
+      )}
+      <TextInput
+        id="calendar-file"
+        label="CSV file with columns day,is_open,open_at,close_at"
+        type="file"
+        accept=".csv,text/csv"
+        onChange={(e) => void onFile(e.target.files?.[0])}
+        hint={
+          <>
+            Example lines: <code className="nowrap">2026-10-01,true,07:45,15:30</code> and <code className="nowrap">2026-10-03,false,,</code>
+          </>
+        }
+      />
       {errors.length > 0 ? (
-        <div className="notice notice-danger" role="alert">
-          <p style={{ margin: 0 }}>Fix these lines and choose the file again:</p>
+        <Notice tone="danger" live="assertive" title="Fix these lines and choose the file again:">
           <ul>
             {errors.map((e) => (
               <li key={e}>{e}</li>
             ))}
           </ul>
-        </div>
+        </Notice>
       ) : null}
       {rows.length > 0 && errors.length === 0 ? (
         <div className="stack">
-          <p style={{ margin: 0 }}>
+          <p>
             {rows.length} days from {s.first} to {s.last}: {s.open} open, {s.closed} closed. Existing days in this range are replaced.
           </p>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void upload()}>
-            {busy ? 'Uploading...' : 'Upload calendar'}
-          </button>
+          <div>
+            <Button variant="primary" disabled={busy} onClick={() => void upload()} icon={<IconUpload />}>
+              {busy ? 'Uploading...' : 'Upload calendar'}
+            </Button>
+          </div>
         </div>
       ) : null}
-      {done ? (
-        <div className="notice notice-ok" role="status">
-          {done}
-        </div>
-      ) : null}
+      <LiveRegion message={done} />
+      {done ? <Notice tone="success">{done}</Notice> : null}
       <ActionError error={error} />
-    </div>
+    </section>
   );
 }

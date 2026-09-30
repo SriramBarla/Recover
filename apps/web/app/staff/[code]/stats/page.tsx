@@ -1,6 +1,8 @@
 // /staff/[code]/stats: the school dashboard (§17) and its printable weekly report; school admins also
 // see recent audit activity (§14.3).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
+import { Table } from '@/components/ui/table.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { fmtDateTime, humanize } from '@/components/staff/format.ts';
 import { PrintButton } from '@/components/staff/PrintButton.tsx';
@@ -37,15 +39,15 @@ export default async function StatsPage({ params, searchParams }: PageProps<'/st
 
   return (
     <>
-      <div className="spread">
-        <div className="stack">
-          <h1>{ctx.school.name} dashboard</h1>
-          <p className="muted">
+      <PageHeader
+        title={<>{ctx.school.name} dashboard</>}
+        description={
+          <>
             {from} to {to}
-          </p>
-        </div>
-        <PrintButton />
-      </div>
+          </>
+        }
+        actions={<PrintButton />}
+      />
       <RangeForm from={from} to={to} />
       {stats.ok ? <StatsView data={stats.data} tz={tz} /> : <ErrorNotice code={stats.code} what="Dashboard" signinHref={signinPath(path)} />}
       {audit ? (
@@ -55,28 +57,26 @@ export default async function StatsPage({ params, searchParams }: PageProps<'/st
             audit.data.length === 0 ? (
               <p className="muted">No activity recorded yet.</p>
             ) : (
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th scope="col">When</th>
-                      <th scope="col">Action</th>
-                      <th scope="col">By</th>
-                      <th scope="col">Record</th>
+              <Table caption="Recent activity" hideCaption>
+                <thead>
+                  <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">Action</th>
+                    <th scope="col">By</th>
+                    <th scope="col">Record</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {audit.data.map((a) => (
+                    <tr key={a.id}>
+                      <td className="small">{fmtDateTime(a.createdAt, tz)}</td>
+                      <td>{humanize(a.action)}</td>
+                      <td className="small">{a.actorKind ?? ''}</td>
+                      <td className="small mono">{a.targetTable ?? ''}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {audit.data.map((a) => (
-                      <tr key={a.id}>
-                        <td className="small">{fmtDateTime(a.createdAt, tz)}</td>
-                        <td>{humanize(a.action)}</td>
-                        <td className="small">{a.actorKind ?? ''}</td>
-                        <td className="small mono">{a.targetTable ?? ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </Table>
             )
           ) : (
             <ErrorNotice code={audit.code} what="Activity" />

@@ -107,6 +107,7 @@
   --shadow-sm: 0 1px 2px rgb(31 29 26 / 0.06);
   --shadow: 0 1px 2px rgb(31 29 26 / 0.06), 0 4px 12px rgb(31 29 26 / 0.05);
   --shadow-lg: 0 2px 6px rgb(31 29 26 / 0.08), 0 16px 40px rgb(31 29 26 / 0.16);
+  --scroll-shadow: rgb(31 29 26 / 0.22);
   --logo-bg: #0f5c56;
   --logo-fg: #ffffff;
   --logo-accent: #f4a259;
@@ -148,6 +149,7 @@
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.28);
     --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.55);
+    --scroll-shadow: rgb(0 0 0 / 0.65);
     --logo-bg: #14756d;
     --logo-fg: #ffffff;
     --logo-accent: #f7b27a;
@@ -190,6 +192,7 @@
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.28);
   --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.55);
+  --scroll-shadow: rgb(0 0 0 / 0.65);
   --logo-bg: #14756d;
   --logo-fg: #ffffff;
   --logo-accent: #f7b27a;
@@ -1197,6 +1200,16 @@ details[open] > summary .school-switcher-chevron {
 .btn-block {
   width: 100%;
 }
+/* A <label class="btn"> wrapping a visually hidden input (file pickers) shows the input's focus. */
+.btn:has(> input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.photo-remove {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+}
 .btn-sm {
   min-height: var(--control-h-sm);
   padding: 0.25rem 0.75rem;
@@ -1387,7 +1400,8 @@ details[open] > summary .school-switcher-chevron {
 }
 .fieldset {
   border: 0;
-  margin: 0;
+  margin-inline: 0;
+  margin-bottom: 0;
   padding: 0;
   min-width: 0;
 }
@@ -1414,6 +1428,40 @@ details[open] > summary .school-switcher-chevron {
   height: 1.25rem;
   margin: 0.125rem 0 0;
   flex: none;
+}
+/* Several checkboxes side by side (settings, categories). */
+.choice-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(12.5rem, 100%), 1fr));
+  column-gap: 1rem;
+  row-gap: 0;
+}
+/* A hint that belongs to the choice above it, lined up with the choice's text. */
+.hint.choice-hint {
+  margin: -0.5rem 0 0 1.9rem;
+}
+/* Numbers are short: keep their inputs short so the field reads as a number. */
+.input.input-number {
+  max-width: 10rem;
+}
+/* File inputs: the picker button matches the secondary button. */
+.input[type='file'] {
+  max-width: 32rem;
+  padding: 0.3rem 0.4rem;
+  cursor: pointer;
+}
+.input[type='file']::file-selector-button {
+  font: inherit;
+  font-weight: 600;
+  margin-right: 0.75rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.input[type='file']:hover::file-selector-button {
+  background: var(--surface-3);
 }
 
 /* Choice tiles: big icon targets for the category step and similar pickers. */
@@ -1894,17 +1942,24 @@ button.chip-sm {
    15. Tables
    ======================================================================== */
 /* position: relative keeps visually-hidden text inside the scroller (otherwise it widens the page). */
+/* Scroll shadows: when a wide table overflows, a soft edge shows on the side it can scroll toward.
+   The surface-colored covers scroll with the content (local) and hide the fixed shadows at the ends. */
 .table-wrap {
   position: relative;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left center / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right center / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--scroll-shadow), transparent) left center / 0.9rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right center / 0.9rem 100% no-repeat scroll,
+    var(--surface);
 }
 .table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--surface);
+  background: transparent;
   font-size: 0.9375rem;
 }
 .table caption {
@@ -1920,6 +1975,9 @@ button.chip-sm {
   padding: 0.6rem 0.75rem;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
+}
+.table td {
+  overflow-wrap: break-word;
 }
 .table-top th,
 .table-top td {
@@ -2383,6 +2441,12 @@ button.chip-sm {
 .map-readout-text svg {
   color: var(--accent);
 }
+.coordinate-inputs {
+  align-items: flex-end;
+}
+.coordinate-inputs .field {
+  width: 8rem;
+}
 .map-help {
   margin: 0;
   font-size: var(--text-sm);
@@ -2628,6 +2692,27 @@ button.chip-sm {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Printed dashboards (the weekly report): no chrome or controls, flat surfaces, black on white. */
+@media print {
+  .topbar,
+  .skip-link,
+  .no-print,
+  .page-header-back,
+  .footer {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .card,
+  .kpi,
+  .table-wrap {
+    box-shadow: none;
+    break-inside: avoid;
   }
 }
 

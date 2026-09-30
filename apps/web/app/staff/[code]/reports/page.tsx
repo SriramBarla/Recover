@@ -1,6 +1,7 @@
 // /staff/[code]/reports: open lost reports at this school, without device data; staff can close
 // them (G-43, closed_by_staff).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { ReportsTable } from '@/components/staff/ReportsTable.tsx';
 import { lostReportsOf } from '@/components/staff/shapes.ts';
@@ -20,10 +21,7 @@ export default async function ReportsPage({ params }: PageProps<'/staff/[code]/r
 
   return (
     <>
-      <div className="stack">
-        <h1>Lost reports</h1>
-        <p className="muted">What students reported losing here. Matching items show up on their device; nothing is sent anywhere.</p>
-      </div>
+      <PageHeader title={<>Lost reports</>} description={<>What students reported losing here. Matching items show up on their device; nothing is sent anywhere.</>} />
       {reports.ok ? (
         <ReportsTable
           code={code}

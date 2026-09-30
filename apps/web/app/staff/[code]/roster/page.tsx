@@ -1,6 +1,7 @@
 // /staff/[code]/roster: school admins invite staff, change roles, and deactivate (§5.5). Role and
 // status changes need a recent sign-in (G-31).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { RosterManager } from '@/components/staff/RosterManager.tsx';
 import { rosterOf } from '@/components/staff/shapes.ts';
@@ -19,10 +20,7 @@ export default async function RosterPage({ params }: PageProps<'/staff/[code]/ro
 
   return (
     <>
-      <div className="stack">
-        <h1>Roster</h1>
-        <p className="muted">Staff sign in with their district Google account. Only people on this roster can sign in to {ctx.school.name}.</p>
-      </div>
+      <PageHeader title={<>Roster</>} description={<>Staff sign in with their district Google account. Only people on this roster can sign in to {ctx.school.name}.</>} />
       {roster.ok ? (
         <RosterManager code={code} members={roster.data} canRebind={ctx.isDistrict} tz={meta?.timezone ?? null} />
       ) : (

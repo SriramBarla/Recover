@@ -1,6 +1,8 @@
 // Dashboard rendering for api_staff_stats / api_district_stats (§17 metrics). The contract does not
 // pin these shapes, so this renders numbers as KPI tiles (top level and one nested level) and arrays
 // of objects as tables. No chart library (§18 budgets). Works in server and client components.
+import { Stat, StatGrid } from '@/components/ui/stat.tsx';
+import { Table } from '@/components/ui/table.tsx';
 import { fmtDate, humanize } from './format.ts';
 import { obj, type Obj } from './shapes.ts';
 
@@ -54,43 +56,42 @@ export function StatsView({ data, tz }: { data: unknown; tz?: string | null }) {
       {groups.map((g) => (
         <section key={g.title ?? 'totals'} className="stack" aria-label={g.title ?? 'Totals'}>
           {g.title ? <h3>{g.title}</h3> : null}
-          <div className="kpis">
+          <StatGrid>
             {g.entries.map(([k, v]) => (
-              <div key={k} className="kpi">
-                <div className="value">{fmtValue(k, v, tz)}</div>
-                <div className="label">{humanize(k)}</div>
-              </div>
+              <Stat key={k} value={fmtValue(k, v, tz)} label={humanize(k)} />
             ))}
-          </div>
+          </StatGrid>
         </section>
       ))}
       {tables.map((t) => {
         const cols = columns(t.rows);
+        // Right-align columns that only hold numbers, so digits line up.
+        const numeric = new Set(cols.filter((c) => t.rows.every((r) => r[c] === null || r[c] === undefined || typeof r[c] === 'number')));
         return (
           <section key={t.key} className="stack">
             <h3>{humanize(t.key)}</h3>
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
+            <Table caption={humanize(t.key)} hideCaption dense>
+              <thead>
+                <tr>
+                  {cols.map((c) => (
+                    <th key={c} scope="col" className={numeric.has(c) ? 'num' : undefined}>
+                      {humanize(c)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {t.rows.slice(0, 400).map((r, i) => (
+                  <tr key={i}>
                     {cols.map((c) => (
-                      <th key={c} scope="col">
-                        {humanize(c)}
-                      </th>
+                      <td key={c} className={numeric.has(c) ? 'num' : typeof r[c] === 'string' && /^\d{4}-\d{2}-\d{2}/.test(r[c] as string) ? 'nowrap' : undefined}>
+                        {fmtValue(c, r[c], tz)}
+                      </td>
                     ))}
                   </tr>
-                </thead>
-                <tbody>
-                  {t.rows.slice(0, 400).map((r, i) => (
-                    <tr key={i}>
-                      {cols.map((c) => (
-                        <td key={c}>{fmtValue(c, r[c], tz)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </Table>
           </section>
         );
       })}

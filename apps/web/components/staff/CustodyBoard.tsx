@@ -139,21 +139,21 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
           <p className="muted">No items are on their way.</p>
         ) : (
           <Table caption="Expected arrivals" hideCaption>
-              <thead>
-                <tr>
-                  <th scope="col">Photo</th>
-                  <th scope="col">Item</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Posted</th>
-                  <th scope="col">Deadline</th>
-                  <th scope="col">Check in</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expected.map((r) => (
-                  <ExpectedRow key={r.id} row={r} locations={locations} can={can.receive} busy={busy.has(r.id)} error={errors[r.id]} tz={tz} thumbCell={thumbCell(r)} idCell={idCell(r)} locName={locName} onReceive={(locationId) => void run(r, 'receive', { locationId }, 'Checked in')} />
-                ))}
-              </tbody>
+            <thead>
+              <tr>
+                <th scope="col">Photo</th>
+                <th scope="col">Item</th>
+                <th scope="col">Description</th>
+                <th scope="col">Posted</th>
+                <th scope="col">Deadline</th>
+                <th scope="col">Check in</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expected.map((r) => (
+                <ExpectedRow key={r.id} row={r} locations={locations} can={can.receive} busy={busy.has(r.id)} error={errors[r.id]} tz={tz} thumbCell={thumbCell(r)} idCell={idCell(r)} locName={locName} onReceive={(locationId) => void run(r, 'receive', { locationId }, 'Checked in')} />
+              ))}
+            </tbody>
           </Table>
         )}
       </section>
@@ -167,44 +167,44 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
           <p className="muted">Nothing is checked in.</p>
         ) : (
           <Table caption="At a location" hideCaption>
-              <thead>
-                <tr>
-                  <th scope="col">Photo</th>
-                  <th scope="col">Item</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Location</th>
-                  <th scope="col">Actions</th>
+            <thead>
+              <tr>
+                <th scope="col">Photo</th>
+                <th scope="col">Item</th>
+                <th scope="col">Description</th>
+                <th scope="col">Location</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {atLocation.map((r) => (
+                <tr key={r.id} aria-busy={busy.has(r.id)}>
+                  {thumbCell(r)}
+                  {idCell(r)}
+                  <td>{r.description ?? <span className="muted">None</span>}</td>
+                  <td>
+                    <StatusBadge kind="custody" status="at_location" label={locName(r.locationId)} />
+                    {r.receivedAt ? <div className="small muted">since {fmtDate(r.receivedAt, tz)}</div> : null}
+                    {r.expiresAt ? <div className="small muted">retention ends {fmtDate(r.expiresAt, tz)}</div> : null}
+                  </td>
+                  <td className="stack-sm">
+                    {can.transfer ? <TransferControl row={r} locations={locations} busy={busy.has(r.id)} onTransfer={(locationId) => void run(r, 'transfer', { locationId }, 'Transferred')} /> : null}
+                    <div className="row" style={{ alignItems: 'flex-start' }}>
+                      {can.claim ? (
+                        <ConfirmButton
+                          label="Claimed"
+                          prompt="Did you verify ownership in person with a detail that is not in the public listing?"
+                          confirmLabel="Yes, mark claimed"
+                          onConfirm={() => confirmRun(r, 'claim', {}, 'Marked claimed')}
+                        />
+                      ) : null}
+                      {can.dispose ? <DisposeControl onConfirm={(disposition) => confirmRun(r, 'dispose', { disposition }, 'Recorded')} /> : null}
+                    </div>
+                    <ActionError error={errors[r.id]} />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {atLocation.map((r) => (
-                  <tr key={r.id} aria-busy={busy.has(r.id)}>
-                    {thumbCell(r)}
-                    {idCell(r)}
-                    <td>{r.description ?? <span className="muted">None</span>}</td>
-                    <td>
-                      <StatusBadge kind="custody" status="at_location" label={locName(r.locationId)} />
-                      {r.receivedAt ? <div className="small muted">since {fmtDate(r.receivedAt, tz)}</div> : null}
-                      {r.expiresAt ? <div className="small muted">retention ends {fmtDate(r.expiresAt, tz)}</div> : null}
-                    </td>
-                    <td className="stack-sm">
-                      {can.transfer ? <TransferControl row={r} locations={locations} busy={busy.has(r.id)} onTransfer={(locationId) => void run(r, 'transfer', { locationId }, 'Transferred')} /> : null}
-                      <div className="row" style={{ alignItems: 'flex-start' }}>
-                        {can.claim ? (
-                          <ConfirmButton
-                            label="Claimed"
-                            prompt="Did you verify ownership in person with a detail that is not in the public listing?"
-                            confirmLabel="Yes, mark claimed"
-                            onConfirm={() => confirmRun(r, 'claim', {}, 'Marked claimed')}
-                          />
-                        ) : null}
-                        {can.dispose ? <DisposeControl onConfirm={(disposition) => confirmRun(r, 'dispose', { disposition }, 'Recorded')} /> : null}
-                      </div>
-                      <ActionError error={errors[r.id]} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              ))}
+            </tbody>
           </Table>
         )}
       </section>
@@ -253,34 +253,34 @@ export function CustodyBoard({ code, lists, locations, can, tz }: Props) {
               </div>
             ) : null}
             <Table caption="Disposition due" hideCaption>
-                <thead>
-                  <tr>
-                    {can.bulkDispose ? <th scope="col">Select</th> : null}
-                    <th scope="col">Photo</th>
-                    <th scope="col">Item</th>
-                    <th scope="col">Location</th>
-                    <th scope="col">Due since</th>
-                    <th scope="col">State</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {due.map((r) => (
-                    <tr key={r.id}>
-                      {can.bulkDispose ? (
-                        <td>
-                          <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.publicId ?? 'item'}`} />
-                        </td>
-                      ) : null}
-                      {thumbCell(r)}
-                      {idCell(r)}
-                      <td>{locName(r.locationId)}</td>
-                      <td>{fmtDateTime(r.dispositionDueAt, tz)}</td>
+              <thead>
+                <tr>
+                  {can.bulkDispose ? <th scope="col">Select</th> : null}
+                  <th scope="col">Photo</th>
+                  <th scope="col">Item</th>
+                  <th scope="col">Location</th>
+                  <th scope="col">Due since</th>
+                  <th scope="col">State</th>
+                </tr>
+              </thead>
+              <tbody>
+                {due.map((r) => (
+                  <tr key={r.id}>
+                    {can.bulkDispose ? (
                       <td>
-                        <StatusBadge kind="custody" status={r.custody} label={label(CUSTODY_LABELS, r.custody)} />
+                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.publicId ?? 'item'}`} />
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
+                    ) : null}
+                    {thumbCell(r)}
+                    {idCell(r)}
+                    <td>{locName(r.locationId)}</td>
+                    <td>{fmtDateTime(r.dispositionDueAt, tz)}</td>
+                    <td>
+                      <StatusBadge kind="custody" status={r.custody} label={label(CUSTODY_LABELS, r.custody)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </Table>
           </>
         )}

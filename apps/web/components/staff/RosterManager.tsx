@@ -3,6 +3,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import type { StaffRole } from '@recover/shared/dto.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconCheck, IconPlus, IconUsers } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
+import { StatusBadge } from '@/components/ui/status-badge.tsx';
+import { Table } from '@/components/ui/table.tsx';
 import { ActionError } from './ActionError.tsx';
 import { staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
@@ -47,71 +55,66 @@ export function RosterManager({ code, members, canRebind, tz }: Props) {
 
   return (
     <div className="stack-lg">
-      <section className="card stack" aria-labelledby="invite-h">
-        <h2 id="invite-h">Invite staff</h2>
+      <section className="card card-pad-lg stack" aria-labelledby="invite-h">
+        <h2 id="invite-h" className="with-icon">
+          <IconPlus />
+          Invite staff
+        </h2>
+        <p className="hint">Reviewers review posts. Office staff also handle custody and devices. School admins also manage the roster, locations, map, and settings.</p>
         <form onSubmit={invite} className="stack">
-          <div className="grid">
-            <label className="field">
-              <span className="label">District email</span>
-              <input className="input" type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="label">Name (optional)</span>
-              <input className="input" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="label">Role</span>
-              <select className="select" value={role} onChange={(e) => setRole(e.target.value as Assignable)}>
-                {ASSIGNABLE_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABELS[r]}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="grid-wide">
+            <TextInput id="invite-email" label="District email" type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <TextInput id="invite-name" label="Name" optional maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+            <Select
+              id="invite-role"
+              label="Role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as Assignable)}
+              options={ASSIGNABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+            />
           </div>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Inviting...' : 'Invite'}
-          </button>
+          <div>
+            <Button type="submit" variant="primary" disabled={busy} icon={<IconPlus />}>
+              {busy ? 'Inviting...' : 'Invite'}
+            </Button>
+          </div>
           <ActionError error={error} />
         </form>
         {invited ? (
-          <div className="notice notice-ok stack" role="status">
-            <p style={{ margin: 0 }}>
-              Invited {invited}. Recover does not send email: share this sign-in link with them.
-            </p>
+          <Notice tone="success" live="polite">
+            <p>Invited {invited}. Recover does not send email: share this sign-in link with them.</p>
             <div className="row">
-              <input className="input mono" readOnly value={link} aria-label="Sign-in link" onFocus={(e) => e.currentTarget.select()} style={{ flex: 1, minWidth: '16rem' }} />
+              <input className="input mono" readOnly value={link} aria-label="Sign-in link" onFocus={(e) => e.currentTarget.select()} style={{ flex: '1 1 16rem', width: 'auto' }} />
               <CopyButton text={link} />
             </div>
-          </div>
+          </Notice>
         ) : null}
-        <p className="hint">Reviewers review posts. Office staff also handle custody and devices. School admins also manage the roster, locations, map, and settings.</p>
       </section>
 
       <section className="stack" aria-labelledby="roster-h">
-        <h2 id="roster-h">Staff at {code}</h2>
+        <h2 id="roster-h" className="with-icon">
+          <IconUsers />
+          Staff at {code}
+        </h2>
         {members.length === 0 ? (
           <p className="muted">No staff yet.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Email</th>
-                  <th scope="col">Last sign-in</th>
-                  <th scope="col">Role and status</th>
-                  {canRebind ? <th scope="col">Google link</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((m) => (
-                  <MemberRow key={m.memberId} code={code} m={m} canRebind={canRebind} tz={tz} onChanged={() => router.refresh()} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table caption={`Staff at ${code}`} hideCaption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Last sign-in</th>
+                <th scope="col">Role and status</th>
+                {canRebind ? <th scope="col">Google link</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((m) => (
+                <MemberRow key={m.memberId} code={code} m={m} canRebind={canRebind} tz={tz} onChanged={() => router.refresh()} />
+              ))}
+            </tbody>
+          </Table>
         )}
       </section>
     </div>
@@ -127,28 +130,30 @@ function MemberRow({ code, m, canRebind, tz, onChanged }: { code: string; m: Ros
     <tr>
       <td>{m.displayName ?? <span className="muted">Not set</span>}</td>
       <td className="mono small">{m.email}</td>
-      <td className="small">{m.lastLoginAt ? fmtDateTime(m.lastLoginAt, tz) : m.status === 'invited' ? <span className="badge">Invited</span> : 'Never'}</td>
+      <td className="small">{m.lastLoginAt ? fmtDateTime(m.lastLoginAt, tz) : m.status === 'invited' ? <StatusBadge kind="member" status="invited" /> : 'Never'}</td>
       <td>
         {editable ? (
           <div className="stack">
             <div className="row">
-              <label className="field">
-                <span className="visually-hidden">Role</span>
-                <select className="select" value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
-                  {ASSIGNABLE_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span className="visually-hidden">Status</span>
-                <select className="select" value={status} onChange={(e) => setStatus(e.target.value as (typeof MEMBER_STATUSES)[number])}>
-                  <option value="active">Active</option>
-                  <option value="deactivated">Deactivated</option>
-                </select>
-              </label>
+              <Select
+                id={`role-${m.memberId}`}
+                label="Role"
+                hideLabel
+                value={role}
+                onChange={(e) => setRole(e.target.value as StaffRole)}
+                options={ASSIGNABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+              />
+              <Select
+                id={`status-${m.memberId}`}
+                label="Status"
+                hideLabel
+                value={status}
+                onChange={(e) => setStatus(e.target.value as (typeof MEMBER_STATUSES)[number])}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'deactivated', label: 'Deactivated' },
+                ]}
+              />
             </div>
             {changed ? (
               <ConfirmButton
@@ -164,7 +169,7 @@ function MemberRow({ code, m, canRebind, tz, onChanged }: { code: string; m: Ros
             ) : null}
           </div>
         ) : (
-          <span>{m.role ? ROLE_LABELS[m.role] : 'Unknown'}</span>
+          <Badge tone="brand">{m.role ? ROLE_LABELS[m.role] : 'Unknown'}</Badge>
         )}
       </td>
       {canRebind ? (
@@ -192,9 +197,8 @@ function MemberRow({ code, m, canRebind, tz, onChanged }: { code: string; m: Ros
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      type="button"
-      className="btn"
+    <Button
+      icon={copied ? <IconCheck /> : undefined}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -206,6 +210,6 @@ function CopyButton({ text }: { text: string }) {
       }}
     >
       {copied ? 'Copied' : 'Copy link'}
-    </button>
+    </Button>
   );
 }
