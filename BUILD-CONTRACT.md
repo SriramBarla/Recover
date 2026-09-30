@@ -647,3 +647,16 @@ These were agreed between agents while building and are now part of the contract
 - `api_staff_create_item` and `api_staff_map_create_draft` claim the assertion's idempotency key, or its `request_id` when there is none, in `idempotency_keys` (principal kind `staff`, operations `item.create` and `map.create`). A replay returns the first result. The same key with a different body is `idempotency_conflict`.
 - `recover_attestation_owner` reads `private.staff_assertion_keys` (the `staff_assertion_key_*` rows) and has no grant on `vault.decrypted_secrets`.
 - The login roles have USAGE on `public` only, apart from the catalogs. `supabase/tests/security_review.sql` checks all of the above.
+
+**Device-key rotation (T-825; 13 Implementation guide "Device cookie issuance"; RUNBOOK.md section 21)**
+- Web env: `DEVICE_KEY_CURRENT` is the version every digest is written and looked up with (default 1). `DEVICE_KEY_PREVIOUS` is set only during a rotation window and must differ. Each of the two versions needs its `DEVICE_KEY_V<n>` (32 bytes, base64url), so `DEVICE_KEY_V1` is required only while version 1 is current or previous. Startup logs `device_keys_invalid` or `device_keys_unused`, naming variables only.
+- `api_device_rekey(p_school_code, p_old_digest, p_new_digest)` is in the 6.1 family (owner `recover_api_owner`, EXECUTE to `recover_web`). It returns counts `{items, lostReports, deviceRejections, devices, rateCounters, idempotencyKeys}` and moves one browser's rows at one school from its previous-key digest to its current-key digest:
+  - `items.device_token_hash` and `lost_reports.device_token_hash` (any status);
+  - `devices`, merged into an existing current-key row: the older `first_seen_at`, the later `last_seen_at`, and the block that runs later;
+  - `device_rejections`;
+  - device `rate_counters`, where counts of the same window add up;
+  - device `idempotency_keys`, where a current-key row for the same key wins.
+
+  Both digests must be 33 bytes with different version bytes. The call is idempotent and writes no audit row and no job. A moved item or report gets a new `row_version`.
+- During a window, `getDevice` (route handlers) and `cookieDigest` (Server Components) in `apps/web/lib/device.ts` call it for an existing cookie before the request's first device-bound call. A failed move fails the request. Outside a window nothing extra runs.
+- The api family gains DELETE on `devices`, `rate_counters`, and `idempotency_keys` (rows move as delete + upsert), and UPDATE of `device_rejections.device_token_hash`. Index `reports_device_link` covers `lost_reports (school_id, device_token_hash)` where the digest is set. `supabase/tests/device_rekey.sql` checks the move.

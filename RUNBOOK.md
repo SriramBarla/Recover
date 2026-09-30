@@ -631,25 +631,42 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 
 ## 21. Device-key rotation
 
-- **Trigger:** a scheduled rotation, or a suspected leak of `DEVICE_KEY_V1`.
+- **Trigger:** a scheduled rotation, or a suspected leak of the current device key (`DEVICE_KEY_V<n>` for the version in `DEVICE_KEY_CURRENT`, which is 1 until the first rotation).
 - **Severity:** district.
 - **Owner:** the district admin with the maintainer.
-- **Current limit:** `apps/web/lib/device.ts` derives digests with `DEVICE_KEY_V1` only (version byte 1). The dual-derivation window in `13-Abuse-and-Rate-Limiting.md` is **not implemented yet**. A planned rotation needs that web change first: derive with both keys, match either, write with the new one.
-- **Steps:**
-  1. **Assess the risk.** A leaked device key alone does not expose students. Reading a report or item status also needs that device's HttpOnly cookie token, and digests are school-scoped HMACs. A planned rotation can therefore wait for the dual-derivation change.
-  2. **Once dual derivation exists:**
-     1. Add `DEVICE_KEY_V2` to `recover-web` and deploy.
-     2. Keep V1 for `lost_report_ttl_days` (60 days), so open reports stay reachable.
-     3. Remove V1 and redeploy.
-  3. **If a rotation cannot wait,** replace `DEVICE_KEY_V1` and redeploy, knowingly:
+- **How the window works:**
+  - A device digest is `version byte || HMAC(DEVICE_KEY_V<version>, school id || token)` (`13-Abuse-and-Rate-Limiting.md`). `recover-web` writes and looks up every digest with the version in `DEVICE_KEY_CURRENT`.
+  - While `DEVICE_KEY_PREVIOUS` is also set, a browser's first device-bound request at a school moves that browser's rows there to its current-key digest (`api_device_rekey`): items, lost reports, its block and reputation, rate counters, and idempotency keys. The browser keeps its cookie and notices nothing.
+  - The window lasts `lost_report_ttl_days`, so every open report either moves or expires before the old key goes. During the window, each device-bound request makes one extra database call.
+  - A moved item or report gets a new `row_version`. A staff screen, or a student page, that listed it before the move reports it as changed once, and a reload fixes it.
+  - Pages still served by the previous deployment (a tab left open under skew protection) keep the old key until they reload. Anything they write moves on the browser's next request to the new deployment.
+- **Steps** (the first rotation, 1 to 2; a later one is the same with each number one higher):
+  1. **Assess the risk.** A leaked device key alone does not expose students. Reading a report or item status also needs that device's HttpOnly cookie token, and digests are school-scoped HMACs. Use the window (step 2) unless the old key must stop working at once (step 4).
+  2. **Open the window.**
+     1. Generate the new key into a new mode-600 file outside the repository. Nothing is printed:
+
+        ```bash
+        node -e "require('fs').writeFileSync(process.argv[1],require('crypto').randomBytes(32).toString('base64url'),{mode:0o600,flag:'wx'})" ~/device-key-v2.txt
+        ```
+
+     2. Add it to `recover-web` production with `vercel env add DEVICE_KEY_V2 production < ~/device-key-v2.txt`, then delete the file with `rm -P`.
+     3. Set `DEVICE_KEY_CURRENT` to `2` and `DEVICE_KEY_PREVIOUS` to `1` (`vercel env rm` / `vercel env add ... production`).
+     4. Redeploy `recover-web`. All three variables must go out in the same deployment: `DEVICE_KEY_CURRENT=2` without `DEVICE_KEY_PREVIOUS` is the forced rotation of step 4.
+  3. **Close the window** once `lost_report_ttl_days` have passed (`select lost_report_ttl_days from public.district_settings;`, 60 by default). Remove `DEVICE_KEY_PREVIOUS` and `DEVICE_KEY_V1` from `recover-web`, and redeploy. Rows still on key 1 belong to browsers that did not come back during the window. Their open reports have expired by then, and their other rows stay unreachable from those browsers, as in step 4.
+  4. **If the old key must stop working now,** add `DEVICE_KEY_V2`, set `DEVICE_KEY_CURRENT=2`, and remove `DEVICE_KEY_V1` without setting `DEVICE_KEY_PREVIOUS`. Redeploy, knowingly:
      - every open lost report becomes unreachable from its device (the accepted risk F-66: staff still see the reports, and students can file again);
      - device reputation and blocks restart.
-- **Verify:** a lost report filed before the rotation is still listed at `/s/<CODE>/lost/mine` on the same browser. With the forced path, confirm that new posts and reports work.
-- **Record:** the date, the path taken, and the count of open reports affected:
+- **Verify:**
+  - After each deploy, the `recover-web` logs have no `device_keys_invalid` error. After closing the window, they have no `device_keys_unused` warning either (that warning names a key no version uses).
+  - A lost report filed before the rotation is still listed at `/s/<CODE>/lost/mine` on the same browser.
+  - During the window, open reports move to the new version byte as their browsers come back:
 
-  ```sql
-  select count(*) from public.lost_reports where status = 'open';
-  ```
+    ```sql
+    select get_byte(device_token_hash, 0) as key_version, count(*) from public.lost_reports where status = 'open' group by 1 order by 1;
+    ```
+
+  - With the forced path, confirm that new posts and reports work.
+- **Record:** the dates the window opened and closed (or the date of the forced path), the key versions, and the counts from the query above at both points.
 
 ## 22. Storage-root credential incident
 
