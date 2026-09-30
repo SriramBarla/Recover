@@ -3,7 +3,8 @@
 // stored (callers HMAC the canonical IP with the monthly IP key before it reaches SQL).
 import { isIPv4, isIPv6 } from 'node:net';
 
-export type RateAction = 'post_item' | 'lost_report' | 'search' | 'status_poll' | 'search_all';
+// client_error is the one school-less action: SQL counts it under the district scope, per address.
+export type RateAction = 'post_item' | 'lost_report' | 'search' | 'status_poll' | 'search_all' | 'high_value' | 'client_error';
 export type RateWindow = { readonly windowSeconds: number; readonly max: number };
 export type Campus = 'onCampus' | 'offCampus';
 export type ActionLimits = {
@@ -27,6 +28,10 @@ export const LIMITS: Readonly<Record<RateAction, ActionLimits>> = {
   // Cross-school search gets its own budget (Appendix B.2, F-79). §13.2 gives no numbers, so it is
   // sized like `search` but counted separately until the district tunes it.
   search_all: { device: [w(10 * MINUTE, 60)], ip: { onCampus: [w(10 * MINUTE, 3000)], offCampus: [w(10 * MINUTE, 200)] } },
+  // The two unauthenticated counters (security review L1; migration 0210). §13.2 gives no numbers; both are
+  // per address only, because neither request carries a device.
+  high_value: { device: [], ip: { onCampus: [w(10 * MINUTE, 20)], offCampus: [w(10 * MINUTE, 20)] } },
+  client_error: { device: [], ip: { onCampus: [w(10 * MINUTE, 60)], offCampus: [w(10 * MINUTE, 60)] } },
 };
 
 // Fixed-window start (epoch-aligned), the `window_start` of a rate_counters row.
