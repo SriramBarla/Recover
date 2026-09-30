@@ -15,7 +15,7 @@ import { toPublicLostReport } from '@/lib/storage-url.ts';
 
 export const GET = handle<{ code: string }>('GET /api/s/[code]/lost-reports', async (req, { code }, reply) => {
   const meta = await getMeta(code);
-  const device = getDevice(req, meta.school.id, { create: false });
+  const device = await getDevice(req, meta.school, { create: false });
   if (!device) return json({ reports: [] }, { requestId: reply.requestId, cache: CACHE.private });
   await take(meta.school.code, 'status_poll', device.digest, req);
   const res = await api<{ reports: MyLostReport[] }>('api_my_lost_reports', {
@@ -68,7 +68,7 @@ export const POST = handle<{ code: string }>('POST /api/s/[code]/lost-reports', 
   const school = meta.school;
   if (!school.flags.lostReports) throw new PublicError('feature_disabled');
 
-  const device = getDevice(req, school.id, { create: true }); // 3
+  const device = await getDevice(req, school, { create: true }); // 3
   reply.setCookie = device.setCookie;
   // Records the device for ownership and staff tooling. A posting block does not stop a lost report (§13.3).
   await api('api_device_touch', { p_school_code: school.code, p_device_digest: device.digest });

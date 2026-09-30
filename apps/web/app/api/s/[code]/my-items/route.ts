@@ -8,7 +8,7 @@ import { take } from '@/lib/ratelimit.ts';
 
 export const GET = handle<{ code: string }>('GET /api/s/[code]/my-items', async (req, { code }, reply) => {
   const meta = await getMeta(code);
-  const device = getDevice(req, meta.school.id, { create: false });
+  const device = await getDevice(req, meta.school, { create: false });
   if (!device) return json({ items: [] }, { requestId: reply.requestId, cache: CACHE.private });
   await take(meta.school.code, 'status_poll', device.digest, req);
   const res = await api<{ items: MyItem[] }>('api_my_items', {

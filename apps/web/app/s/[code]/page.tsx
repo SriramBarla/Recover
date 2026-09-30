@@ -55,13 +55,16 @@ export default async function SchoolHome({ params, searchParams }: Props) {
   const { feed, form } = filtersFrom(sp, meta);
   const filtered = Boolean(feed.locationId || feed.category || feed.since);
 
-  const digest = await deviceDigest(school.id);
-  // The lost-reports card is secondary: if that read fails the feed still renders.
-  const reportsRead: Promise<MyLostReport[]> = digest
-    ? api<{ reports: MyLostReport[] }>('api_my_lost_reports', { p_school_code: code, p_device_digest: digest })
-        .then((r) => r.reports ?? [])
-        .catch(() => [])
-    : Promise.resolve([]);
+  // The lost-reports card is secondary: if that read fails the feed still renders. The digest is part of the
+  // read, because during a device-key rotation window resolving it moves the browser's rows (lib/device.ts).
+  const reportsRead: Promise<MyLostReport[]> = deviceDigest(school)
+    .then((digest) =>
+      digest
+        ? api<{ reports: MyLostReport[] }>('api_my_lost_reports', { p_school_code: code, p_device_digest: digest })
+            .then((r) => r.reports ?? [])
+        : [],
+    )
+    .catch(() => []);
   const [page, reports] = await Promise.all([getFeed(meta, feed), reportsRead]);
   const items = page.items.map(toPublicItem);
   const names = locationNames(meta);

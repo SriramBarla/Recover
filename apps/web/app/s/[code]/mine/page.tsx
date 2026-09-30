@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: Props) {
 export default async function MyItemsPage({ params }: Props) {
   const meta = await metaForPage((await params).code);
   const code = meta.school.code;
-  const digest = await deviceDigest(meta.school.id);
+  const digest = await deviceDigest(meta.school);
   const items = digest
     ? (await api<{ items: MyItem[] }>('api_my_items', { p_school_code: code, p_device_digest: digest })).items
     : [];
