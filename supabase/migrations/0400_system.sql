@@ -1073,10 +1073,13 @@ end $$;
 
 -- Appendix C item_expire_never_arrived with the G-01/G-02 resolutions: every review state except draft,
 -- publication generating/published -> withdrawn (hidden stays hidden), media deletion delayed by the school's
--- late-arrival grace so a late check-in can still cancel it.
+-- late-arrival grace so a late check-in can still cancel it. withdrawn_at equals terminal_at exactly (one v_now):
+-- the late-arrival republish rule compares them. The ledger reason is exactly 'never_arrived', the only reason
+-- private.cancel_pending_deletion may cancel.
 create or replace function public.system_expire_never_arrived() returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
+  v_now timestamptz := now();
   v_row record;
   v_item public.items;
   v_count int := 0;
@@ -1093,14 +1096,14 @@ begin
        for update of i skip locked
   loop
     update public.items
-       set custody = 'expired_never_arrived', terminal_at = now(),
+       set custody = 'expired_never_arrived', terminal_at = v_now,
            publication_status = case when publication_status in ('generating', 'published')
                                      then 'withdrawn'::public.publication_status else publication_status end,
-           withdrawn_at = case when publication_status in ('generating', 'published') then now() else withdrawn_at end
+           withdrawn_at = case when publication_status in ('generating', 'published') then v_now else withdrawn_at end
      where id = v_row.id
     returning * into v_item;
     perform private.create_deletion_ledger(v_item.id, v_item.school_id, 'never_arrived', null,
-      now() + make_interval(days => v_row.late_arrival_grace_days));
+      v_now + make_interval(days => v_row.late_arrival_grace_days));
     if v_row.publication_status in ('generating', 'published') then
       perform private.invalidate(v_item.school_id, v_item.id);
     end if;

@@ -640,7 +640,10 @@ begin
                                  and withdrawn_at is null from public.items where id = a),
                          'pending never-arrived item expires and stays hidden (G-02)');
   perform pg_temp.expect((select custody = 'expired_never_arrived' and publication_status = 'withdrawn' and withdrawn_at = now()
-                                 from public.items where id = b), 'published never-arrived item is withdrawn');
+                                 and withdrawn_at = terminal_at from public.items where id = b),
+                         'published never-arrived item is withdrawn with withdrawn_at = terminal_at');
+  perform pg_temp.expect((select array_agg(distinct l.reason) from public.media_deletion_ledger l where l.item_id in (a, b))
+                         = array['never_arrived'], 'never-arrived ledgers use reason never_arrived exactly');
   perform pg_temp.expect((select custody from public.items where id = c) = 'with_finder'
                          and (select custody from public.items where id = d) = 'with_finder',
                          'future deadlines and drafts are untouched');
