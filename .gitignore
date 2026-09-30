@@ -17,3 +17,9 @@ implementations/
 .claude/worktrees/
 .claude/settings.local.json
 worktrees/
+
+# iCloud Drive conflict copies (the repo lives on an iCloud-synced Desktop) and files `next dev` generates
+* [0-9].*
+* [0-9][0-9].*
+apps/*/AGENTS.md
+apps/*/CLAUDE.md

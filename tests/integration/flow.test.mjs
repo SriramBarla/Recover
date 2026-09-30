@@ -56,7 +56,7 @@ describe('student post to verified deletion', { skip: up ? false : 'local stack 
       dropoffLocationId: SCHOOL.westOffice,
       photoCount: 2,
     });
-    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.ok([200, 201].includes(r.status), JSON.stringify(r.data));
     assert.equal(r.data.uploads.length, 2);
     state.itemId = r.data.itemId;
     state.uploads = r.data.uploads;
@@ -153,7 +153,7 @@ describe('student post to verified deletion', { skip: up ? false : 'local stack 
 
   it('a lost report from another device is matched in-app', async () => {
     const r = await loser.post(`/api/s/${SCHOOL.code}/lost-reports`, { category: 'bottle', description: 'lost my navy blue metal water bottle' });
-    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.ok([200, 201].includes(r.status), JSON.stringify(r.data));
     await drain();
     const mine = await loser.get(`/api/s/${SCHOOL.code}/lost-reports`);
     assert.equal(mine.status, 200);

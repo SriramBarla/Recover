@@ -4,6 +4,7 @@
 // here only shapes requests and UX. Nothing here logs sessions, subjects, emails, or bodies.
 import { randomUUID } from 'node:crypto';
 import { cache } from 'react';
+import { revalidateTag } from 'next/cache';
 import { notFound, redirect, unstable_rethrow } from 'next/navigation';
 import type { NextRequest } from 'next/server';
 import type { Category, Meta, StaffRole } from '@recover/shared/dto.ts';
@@ -72,9 +73,9 @@ export type SchoolScope = { sub: string; schoolId: string; code: string };
 
 // Catalog-driven call for a school-scoped function: operation, target, and row_version come from
 // the FNS table in ops.ts so a route cannot drift from the assertion the SQL side recomputes.
-export function schoolCall<T>(ctx: SchoolScope, fn: StaffFn, args: Args, opts: { idempotencyKey?: string | null } = {}): Promise<T> {
+export async function schoolCall<T>(ctx: SchoolScope, fn: StaffFn, args: Args, opts: { idempotencyKey?: string | null } = {}): Promise<T> {
   const spec = specFor(fn, args);
-  return callAs<T>(ctx.sub, {
+  const out = await callAs<T>(ctx.sub, {
     fn,
     args,
     operation: spec.operation,
@@ -84,6 +85,31 @@ export function schoolCall<T>(ctx: SchoolScope, fn: StaffFn, args: Args, opts: {
     rowVersion: spec.rowVersion,
     idempotencyKey: opts.idempotencyKey ?? null,
   });
+  if (PUBLIC_VISIBILITY_FNS.has(fn)) expireSchoolCaches(ctx.schoolId);
+  return out;
+}
+
+// Mutations that can change what students see right now (custody line, description, or visibility).
+const PUBLIC_VISIBILITY_FNS: ReadonlySet<StaffFn> = new Set<StaffFn>([
+  'api_staff_item_claim',
+  'api_staff_item_dispose',
+  'api_staff_bulk_dispose',
+  'api_staff_item_pull',
+  'api_staff_item_delete',
+  'api_staff_item_edit',
+  'api_staff_item_receive',
+  'api_staff_item_transfer',
+  'api_staff_photo_drop',
+]);
+
+// §5.4: best-effort synchronous invalidation at the moment of the change; the outbox invalidate_cache
+// job (§7.6) remains the guarantee. { expire: 0 } expires immediately instead of serving stale once.
+function expireSchoolCaches(schoolId: string): void {
+  try {
+    revalidateTag(`school:${schoolId}`, { expire: 0 });
+  } catch {
+    // outside a request scope; the outbox job still runs
+  }
 }
 
 export function districtCall<T>(ctx: { sub: string }, fn: StaffFn, args: Args = {}): Promise<T> {
