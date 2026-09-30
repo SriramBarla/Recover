@@ -5,7 +5,7 @@ import { HIGH_VALUE_CATEGORIES, type Category, type UploadSpec } from '@recover/
 import type { StaffMeta } from '../../lib/staff.ts';
 import { ActionError } from './ActionError.tsx';
 import { ApiError, newKey, staffApi } from './client-api.ts';
-import { ALL_CATEGORIES } from './constants.ts';
+import { STAFF_POST_CATEGORIES } from './constants.ts';
 import { categoryLabel } from './format.ts';
 import { PhotoPrepError, putWithRetry, toJpeg } from './image-prep.ts';
 import { MapCanvas, type Point } from './MapCanvas.tsx';
@@ -225,15 +225,17 @@ export function PostForm({ code, mode, meta }: Props) {
               <option value="" disabled>
                 Choose a category
               </option>
-              {ALL_CATEGORIES.map((c) => (
+              {STAFF_POST_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {categoryLabel(c)}
                 </option>
               ))}
             </select>
             {highValue ? (
-              <span className="hint">High-value or sensitive item: use a plain photo and generic text (for example "black phone"). Keep serial numbers, names, and other proof-of-ownership details out of view.</span>
-            ) : null}
+              <span className="hint">High-value item: use a plain photo and generic text (for example "black phone"). Keep serial numbers, names, and other proof-of-ownership details out of view.</span>
+            ) : (
+              <span className="hint">ID cards and medication are handled at the office and are not posted.</span>
+            )}
           </label>
           <label className="field">
             <span className="label">Description (public)</span>

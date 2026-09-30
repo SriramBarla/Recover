@@ -7,6 +7,10 @@ export const ALL_CATEGORIES: readonly Category[] = [
   'phone', 'wallet', 'keys', 'id_card', 'medication',
 ];
 
+// Staff posts and staff-item edits: ID cards and medication are handled offline and never get a
+// posted row (§5.3.1; api_staff_create_item and the edits validator refuse them).
+export const STAFF_POST_CATEGORIES: readonly Category[] = ALL_CATEGORIES.filter((c) => c !== 'id_card' && c !== 'medication');
+
 export const REJECT_REASONS: readonly RejectReason[] = ['inappropriate', 'not_an_item', 'duplicate', 'pii_visible', 'spam', 'other'];
 
 // Reason codes rather than free text, so no free text can reach audit rows (contract section 0).

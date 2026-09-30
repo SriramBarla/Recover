@@ -3,7 +3,7 @@
 // 2. The worker broker returns presigned PUTs for the declared photo slots (same broker as students).
 // The browser then PUTs the photos and calls items/[id]/complete.
 import type { UploadSpec } from '@recover/shared/dto.ts';
-import { ALL_CATEGORIES, POST_MODES, coordStr, enumOf, intOf, publicDescriptionOf, textOf, uuidOf, uuidOrNull } from '@/lib/ops.ts';
+import { POST_MODES, STAFF_POST_CATEGORIES, coordStr, enumOf, intOf, publicDescriptionOf, textOf, uuidOf, uuidOrNull } from '@/lib/ops.ts';
 import { apiSchool, handler, idempotencyKeyOf, mutation, ok, schoolCall } from '@/lib/staff.ts';
 import { workerJson } from '@/lib/worker.ts';
 
@@ -19,7 +19,7 @@ export const POST = handler<{ code: string }>('staff.items.create', async (req, 
     {
       p_school_code: ctx.code,
       p_mode: enumOf(body.mode ?? 'staff', 'mode', POST_MODES),
-      p_category: enumOf(body.category, 'category', ALL_CATEGORIES),
+      p_category: enumOf(body.category, 'category', STAFF_POST_CATEGORIES),
       p_description: publicDescriptionOf(body.description),
       p_note: textOf(body.note, 'note', { max: 80, optional: true }),
       p_map_version_id: hasPin ? uuidOf(body.mapVersionId, 'mapVersionId') : uuidOrNull(body.mapVersionId, 'mapVersionId'),

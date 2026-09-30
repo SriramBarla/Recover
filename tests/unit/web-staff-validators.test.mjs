@@ -49,6 +49,10 @@ test('editsOf keeps only the four contract keys', () => {
   });
   assert.throws(() => editsOf({ note: 'x' }), { code: 'invalid_input', field: 'note' });
   assert.throws(() => editsOf({ category: 'car' }), { code: 'invalid_input', field: 'category' });
+  // §5.3.1: ID cards and medication are handled offline and never become a posted item.
+  assert.throws(() => editsOf({ category: 'id_card' }), { code: 'invalid_input', field: 'category' });
+  assert.throws(() => editsOf({ category: 'medication' }), { code: 'invalid_input', field: 'category' });
+  assert.deepEqual(editsOf({ category: 'phone' }), { category: 'phone' });
   assert.throws(() => editsOf({ zoneId: 'z1' }), { code: 'invalid_input', field: 'zoneId' });
   assert.throws(() => editsOf([]), { code: 'invalid_input', field: 'edits' });
 });

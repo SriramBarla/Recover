@@ -107,7 +107,8 @@ function VersionPanel({ code, v, tz, onChanged }: { code: string; v: MapVersionR
   const [zone, setZone] = useState<ZoneRow | null>(null);
   const [center, setCenter] = useState<Point | null>(null);
   const processed = v.width !== null && v.height !== null;
-  const src = processed || v.hasImage ? `/api/staff/${code}/maps/${v.id}/image` : null;
+  // The worker streams a map only once it is canonical (it never serves the raw upload).
+  const src = processed ? `/api/staff/${code}/maps/${v.id}/image` : null;
 
   return (
     <section className="card stack-lg" aria-labelledby="version-h">
@@ -252,9 +253,12 @@ function UploadImage({ code, versionId, onDone }: { code: string; versionId: str
         throw new ApiError('invalid_input', 'That image could not be read.', 400);
       }
       if (width < MIN_WIDTH) throw new ApiError('invalid_input', `The image must be at least ${MIN_WIDTH} pixels wide.`, 400);
-      const put = await staffApi<{ url: string | null; headers?: Record<string, string> }>(`/api/staff/${code}/maps/${versionId}/upload`, { body: {} });
+      const put = await staffApi<{ url: string | null; contentType: string }>(`/api/staff/${code}/maps/${versionId}/upload`, {
+        body: { contentType: file.type },
+      });
       if (!put.url) throw new ApiError('upstream_unavailable', 'The upload link could not be created. Please try again.', 503);
-      const res = await fetch(put.url, { method: 'PUT', body: file, headers: { 'content-type': file.type, ...(put.headers ?? {}) }, credentials: 'omit' });
+      // The presigned PUT signs the content type: send exactly the value the broker returned.
+      const res = await fetch(put.url, { method: 'PUT', body: file, headers: { 'content-type': put.contentType }, credentials: 'omit' });
       if (!res.ok) throw new ApiError('upstream_unavailable', 'The upload was refused or the link expired. Please try again.', 503);
       setFile(null);
       onDone();

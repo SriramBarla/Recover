@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { STUDENT_CATEGORIES, type RejectReason, type StaffItemRow } from '@recover/shared/dto.ts';
 import type { StaffMeta } from '../../lib/staff.ts';
-import { ALL_CATEGORIES, REJECT_REASONS } from './constants.ts';
+import { REJECT_REASONS, STAFF_POST_CATEGORIES } from './constants.ts';
 import { REJECT_REASON_LABELS, categoryLabel } from './format.ts';
 
 // Edits for approve-with-edits and for editing an approved item (contract 6.2 p_edits: description,
@@ -23,7 +23,7 @@ export function EditForm({
   onCancel: () => void;
   onSubmit: (edits: Record<string, unknown> | null) => void;
 }) {
-  const categories = item.postedByKind === 'student' ? STUDENT_CATEGORIES : ALL_CATEGORIES;
+  const categories = item.postedByKind === 'student' ? STUDENT_CATEGORIES : STAFF_POST_CATEGORIES;
   const [description, setDescription] = useState(item.description ?? '');
   const [category, setCategory] = useState<string>(item.category);
   const [zoneId, setZoneId] = useState(item.zoneId ?? '');

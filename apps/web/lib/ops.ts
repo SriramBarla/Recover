@@ -7,12 +7,13 @@ import { sha256Hex } from '@recover/shared/crypto.ts';
 import { PublicError } from '@recover/shared/errors.ts';
 import { cleanText, hasContactInfo } from '@recover/shared/unicode.ts';
 import type { AssertionBundle, StaffRole } from '@recover/shared/dto.ts';
-import { ALL_CATEGORIES } from '../components/staff/constants.ts';
+import { ALL_CATEGORIES, STAFF_POST_CATEGORIES } from '../components/staff/constants.ts';
 
 // Enumerations used by the staff forms live in a client-safe module (no Node imports); re-exported
 // here so routes and tests have one import site.
 export {
   ALL_CATEGORIES,
+  STAFF_POST_CATEGORIES,
   ASSIGNABLE_ROLES,
   BLOCK_REASONS,
   DELETE_REASONS,
@@ -180,8 +181,8 @@ export const FNS = {
   api_staff_calendar_upsert: { op: 'calendar.write', scope: 'school', target: [] },
   api_staff_stats: { op: 'stats.read', scope: 'school', target: [] },
   api_staff_audit: { op: 'audit.read', scope: 'school', target: [] },
-  // PROPOSED, not in contract 6.2: custody lists for /staff/[code]/custody (expected arrivals,
-  // at location, disposition due). The page falls back to the public feed until it exists.
+  // Added to 0300 for /staff/[code]/custody (expected arrivals, at location, disposition due); not in
+  // contract 6.2. The page keeps a public-feed fallback in case the function is not deployed.
   api_staff_custody_list: { op: 'item.read', scope: 'school', target: [] },
   api_district_schools_list: { op: 'district.schools.read', scope: 'district', target: [] },
   api_district_school_create: { op: 'district.school.create', scope: 'district', target: [] },
@@ -530,7 +531,7 @@ export function editsOf(v: unknown): Record<string, unknown> | null {
     if (!(EDIT_KEYS as readonly string[]).includes(key)) throw new PublicError('invalid_input', key);
   }
   if ('description' in v) out.description = publicDescriptionOf(v.description);
-  if ('category' in v) out.category = enumOf(v.category, 'category', ALL_CATEGORIES);
+  if ('category' in v) out.category = enumOf(v.category, 'category', STAFF_POST_CATEGORIES);
   if ('zoneId' in v) out.zoneId = uuidOrNull(v.zoneId, 'zoneId');
   if ('dropoffLocationId' in v) out.dropoffLocationId = uuidOf(v.dropoffLocationId, 'dropoffLocationId');
   return Object.keys(out).length > 0 ? out : null;

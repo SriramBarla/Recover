@@ -3,9 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ALL_CATEGORIES,
   FNS,
   OP_MIN_ROLE,
   ROLES,
+  STAFF_POST_CATEGORIES,
   STEP_UP_OPS,
   atLeast,
   canPerform,
@@ -73,7 +75,7 @@ const CATALOG_63 = [
 test('every catalogued staff and district function has an assertion spec', () => {
   for (const fn of [...CATALOG_62, ...CATALOG_63]) assert.ok(Object.hasOwn(FNS, fn), fn);
   const extra = Object.keys(FNS).filter((fn) => !CATALOG_62.includes(fn) && !CATALOG_63.includes(fn));
-  assert.deepEqual(extra, ['api_staff_custody_list']); // the one proposed addition, flagged in ops.ts
+  assert.deepEqual(extra, ['api_staff_custody_list']); // the custody-page list added in 0300, outside 6.2
 });
 
 test('district functions and identity functions use district scope; school functions use school scope', () => {
@@ -134,4 +136,9 @@ test('navigation shows only the sections a role can open', () => {
   assert.deepEqual(pagesFor('office').map((p) => p.seg), ['queue', 'custody', 'post', 'reports', 'stats']);
   assert.deepEqual(pagesFor('school_admin').map((p) => p.seg), ['queue', 'custody', 'post', 'reports', 'stats', 'roster', 'locations', 'map', 'config']);
   assert.deepEqual(pagesFor('district_admin').map((p) => p.seg), pagesFor('school_admin').map((p) => p.seg));
+});
+
+test('staff posts never offer ID cards or medication (§5.3.1)', () => {
+  assert.deepEqual([...STAFF_POST_CATEGORIES], ALL_CATEGORIES.filter((c) => c !== 'id_card' && c !== 'medication'));
+  assert.ok(STAFF_POST_CATEGORIES.includes('phone'));
 });

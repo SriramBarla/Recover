@@ -133,7 +133,7 @@ export function LocationsManager({ code, locations, versions }: Props) {
             </div>
             {version ? (
               <MapCanvas
-                src={version.width !== null || version.hasImage ? `/api/staff/${code}/maps/${version.id}/image` : null}
+                src={version.width !== null ? `/api/staff/${code}/maps/${version.id}/image` : null}
                 alt="Campus map"
                 width={version.width}
                 height={version.height}
