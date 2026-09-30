@@ -883,7 +883,7 @@ begin
    where p.item_id = v_id and p.school_id = s.id and p.is_current and lower(o.e->>'photoId') = p.id::text;
 
   update public.items i
-     set review_status = 'pending', public_id = v_public, arrival_deadline_at = v_deadline
+     set review_status = 'pending', public_id = v_public, arrival_deadline_at = v_deadline, arrival_basis_at = now()
    where i.id = v_id and i.school_id = s.id;
 
   for r in

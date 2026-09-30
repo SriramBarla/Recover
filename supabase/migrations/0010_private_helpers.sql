@@ -82,6 +82,13 @@ create type private.staff_ctx as (
   is_district  boolean
 );
 
+-- The verifier's only window into Vault: the staff_assertion_key_* rows. Its owner, recover_attestation_owner,
+-- is granted this view and not vault.decrypted_secrets, so the scheduler bearer and worker URL stay out of reach.
+create view private.staff_assertion_keys with (security_barrier = true) as
+  select s.name, s.decrypted_secret
+    from vault.decrypted_secrets s
+   where s.name like 'staff\_assertion\_key\_%';
+
 -- The only code that touches the assertion key. It never returns the key or the expected MAC (F-104).
 -- Accepts only key versions named by the Vault pointers staff_assertion_key_current/_previous (G-17).
 create function private.verify_staff_mac(p_canonical text, p_key_version int, p_mac text) returns boolean
@@ -92,13 +99,13 @@ declare
   v_key text;
   v_expected text;
 begin
-  select btrim(decrypted_secret) into v_current from vault.decrypted_secrets where name = 'staff_assertion_key_current';
-  select nullif(btrim(decrypted_secret), '') into v_previous from vault.decrypted_secrets where name = 'staff_assertion_key_previous';
+  select btrim(decrypted_secret) into v_current from private.staff_assertion_keys where name = 'staff_assertion_key_current';
+  select nullif(btrim(decrypted_secret), '') into v_previous from private.staff_assertion_keys where name = 'staff_assertion_key_previous';
   if p_key_version is null
      or (p_key_version::text is distinct from v_current and p_key_version::text is distinct from v_previous) then
     return false;
   end if;
-  select btrim(decrypted_secret) into v_key from vault.decrypted_secrets
+  select btrim(decrypted_secret) into v_key from private.staff_assertion_keys
    where name = 'staff_assertion_key_v' || p_key_version::text;
   if v_key is null or p_mac is null then
     return false;
@@ -193,6 +200,52 @@ begin
     case when p_school_id is null then 'district' else 'school:' || p_school_id::text end,
     p_target, p_row_version, p_body);
   return private.staff_context(p_assert->>'google_sub', p_school_id, p_operation);
+end $$;
+
+-- §14.2: an exact replay of an assertion inside its 30 s window cannot repeat an effect. Most mutations bind a
+-- row_version or a natural key. The creates that have neither (item.create, map.create) claim the assertion's
+-- idempotency key, or its request_id when there is none, and store their result. A replay gets the first
+-- result back, and a reused key with a different body is idempotency_conflict.
+create function private.staff_replay_begin(p_assert jsonb, p_ctx private.staff_ctx, p_operation text) returns jsonb
+language plpgsql set search_path = '' as $$
+declare
+  v_scope text := 'school:' || p_ctx.school_id::text;
+  v_principal bytea := sha256(convert_to('staff:' || p_ctx.user_id::text, 'UTF8'));
+  v_key bytea := coalesce(decode(p_assert->>'idempotency_key_sha256', 'hex'),
+                          sha256(convert_to('request_id:' || (p_assert->>'request_id'), 'UTF8')));
+  v_request bytea := decode(p_assert->>'body_sha256', 'hex');
+  k public.idempotency_keys;
+begin
+  insert into public.idempotency_keys (tenant_scope, principal_kind, operation, principal_hmac, key_hash,
+                                       request_hash, expires_at)
+  values (v_scope, 'staff', p_operation, v_principal, v_key, v_request, now() + interval '24 hours')
+  on conflict do nothing;
+  if found then
+    return null;  -- first use: the caller runs and then calls staff_replay_finish
+  end if;
+  select * into k from public.idempotency_keys
+   where tenant_scope = v_scope and principal_kind = 'staff' and operation = p_operation
+     and principal_hmac = v_principal and key_hash = v_key;
+  if k.request_hash is distinct from v_request or k.response_body is null then
+    perform private.fail('idempotency_conflict');
+  end if;
+  return k.response_body;
+end $$;
+
+create function private.staff_replay_finish(p_assert jsonb, p_ctx private.staff_ctx, p_operation text, p_result jsonb)
+returns jsonb
+language plpgsql set search_path = '' as $$
+begin
+  update public.idempotency_keys
+     set response_code = 200, response_body = p_result
+   where tenant_scope = 'school:' || p_ctx.school_id::text and principal_kind = 'staff' and operation = p_operation
+     and principal_hmac = sha256(convert_to('staff:' || p_ctx.user_id::text, 'UTF8'))
+     and key_hash = coalesce(decode(p_assert->>'idempotency_key_sha256', 'hex'),
+                             sha256(convert_to('request_id:' || (p_assert->>'request_id'), 'UTF8')));
+  if not found then
+    raise exception 'staff_replay_finish: no claim for %', p_operation;
+  end if;
+  return p_result;
 end $$;
 
 -- ---------- tenancy and settings ----------

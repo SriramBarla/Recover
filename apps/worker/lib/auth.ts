@@ -18,7 +18,7 @@ export function bearerOf(req: Request): string | null {
   return m ? m[1]! : null;
 }
 
-// Scheduler (pg_cron -> pg_net): sha256(bearer) against SCHEDULER_BEARER_SHA256 in constant time, with
+// Scheduler (pg_cron -> http): sha256(bearer) against SCHEDULER_BEARER_SHA256 in constant time, with
 // no I/O at all (G-18). An unset or malformed expected hash refuses everything.
 export function schedulerAuthorized(req: Request, expectedSha256Hex: string): boolean {
   const presented = bearerOf(req);

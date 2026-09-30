@@ -44,23 +44,39 @@ begin
   return v_n;
 end $$;
 
--- Every minute: ask the worker to drain the queue (§8.3). Secrets are read from Vault at call time (F-62).
+-- Every minute: ask the worker to drain the queue (§8.3). Secrets are read from Vault at call time (F-62). The
+-- call is synchronous (http extension), so the bearer is never written to a table; pg_net's request queue
+-- was readable by the login roles (0001). The worker keeps draining after the 5 s client timeout, so that
+-- timeout is the normal outcome. Any other failure fails the cron run, and cron.job_run_details shows the
+-- HTTP status or the connection error (RUNBOOK 20).
 create or replace function private.cron_drain() returns bigint
 language plpgsql set search_path = '' as $$
 declare
   v_url text;
   v_bearer text;
+  v_status bigint;
 begin
   select nullif(btrim(s.decrypted_secret), '') into v_url from vault.decrypted_secrets s where s.name = 'worker_url';
   select nullif(btrim(s.decrypted_secret), '') into v_bearer from vault.decrypted_secrets s where s.name = 'scheduler_bearer';
   if v_url is null or v_bearer is null then
     return null;  -- not configured (local development): scripts/dev.mjs drives the worker
   end if;
-  return net.http_post(
-    url := rtrim(v_url, '/') || '/api/jobs/run',
-    headers := jsonb_build_object('authorization', 'Bearer ' || v_bearer, 'content-type', 'application/json'),
-    body := '{}'::jsonb,
-    timeout_milliseconds := 5000);
+  perform set_config('http.timeout_msec', '5000', true);
+  begin
+    select r.status into v_status
+      from extensions.http(row('POST', rtrim(v_url, '/') || '/api/jobs/run',
+                               array[extensions.http_header('authorization', 'Bearer ' || v_bearer)],
+                               'application/json', '{}')::extensions.http_request) as r;
+  exception when others then
+    if sqlerrm like 'Operation timed out after %' then
+      return null;  -- connected, and the worker is still draining
+    end if;
+    raise exception 'cron_drain: worker unreachable: %', sqlerrm;
+  end;
+  if v_status not between 200 and 299 then
+    raise exception 'cron_drain: worker returned HTTP %', v_status;
+  end if;
+  return v_status;
 end $$;
 
 -- Every 5 minutes: a health_checks row computed in SQL (§17 health model), then the §17 alert evaluation.

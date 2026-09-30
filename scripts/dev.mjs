@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // `npm run dev`: web on :3000, worker on :3001, and a dev scheduler that drains the worker every 10 s.
-// The dev scheduler stands in for pg_cron -> pg_net, which is the production path (§8.3); it uses the
+// The dev scheduler stands in for pg_cron -> http, which is the production path (§8.3); it uses the
 // same scheduler bearer the worker verifies by SHA-256 (G-18).
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';

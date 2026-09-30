@@ -56,7 +56,8 @@ postgresql://recover_web.<ref>:<password>@<pooler-host>:6543/postgres
 postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
 ```
 
-**10. Cron.** Migration `0450_cron.sql` schedules the one-minute drain. It calls `worker_url` with `scheduler_bearer`, both read from Vault at call time (F-62). Nothing else is needed.
+**10. Cron.** Migration `0450_cron.sql` schedules the one-minute drain. It calls `worker_url` with `scheduler_bearer`, both read from Vault at call time (F-62), through the `http` extension that migration `0001` enables. Nothing else is needed.
+- **Keep pg_net disabled** in Dashboard > Database > Extensions. Its `net` schema and request queue grant PUBLIC access that cannot be revoked, so the app's login roles could make HTTP calls from the database and read queued headers. Migration `0001` drops it, and `supabase/tests/security_review.sql` fails if it comes back.
 
 ## 2. Google Cloud (staff sign-in and Vision)
 
@@ -86,7 +87,7 @@ postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
 3. **Environment variables.** Set each project's variables from `.env.example` with `vercel env add <NAME> production`:
    - Never put `SUPABASE_S3_*` into `recover-web`.
    - Never set `RECOVER_DEV_LOGIN` or `RECOVER_DEV_AUTH` in any Vercel environment. Both are refused on Vercel and in any production build anyway (a production server that finds either set logs `dev_flags_ignored` once at startup).
-4. **Deployment Protection.** Enable it on `recover-worker`, and add a protection bypass for the scheduler if the chosen mode blocks `pg_net` (O-24).
+4. **Deployment Protection.** Enable it on `recover-worker`, and add a protection bypass for the scheduler if the chosen mode blocks the database's drain call (O-24).
 5. **Domain.** Use the district domain on `recover-web`. `recover-worker` keeps its Vercel domain; it has no public product routes.
 
 ## 4. Smoke test

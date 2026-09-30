@@ -424,16 +424,21 @@ language plpgsql security definer set search_path = '' set lock_timeout = '3s' a
 declare
   ctx private.staff_ctx;
   v_id uuid;
+  v_first jsonb;
 begin
   ctx := private.assert_staff(p_assert, 'map.create', (private.school_by_code(p_school_code)).id, null, null,
                               jsonb_build_object('school_code', p_school_code));
+  v_first := private.staff_replay_begin(p_assert, ctx, 'map.create');
+  if v_first is not null then
+    return v_first;  -- a replay of an assertion that already created this draft
+  end if;
   v_id := gen_random_uuid();
   insert into public.map_versions (id, school_id, draft_storage_path, approval_status, created_by)
   values (v_id, ctx.school_id, ctx.school_id::text || '/' || v_id::text || '/draft', 'draft', ctx.member_id);
   perform private.audit(ctx.school_id, 'staff', ctx.member_id::text, (p_assert->>'request_id')::uuid,
     'map.create_draft', 'map_versions', v_id::text,
     '{}'::jsonb, jsonb_build_object('approval_status', 'draft'), '{}'::jsonb);
-  return jsonb_build_object('mapVersionId', v_id);
+  return private.staff_replay_finish(p_assert, ctx, 'map.create', jsonb_build_object('mapVersionId', v_id));
 end $$;
 
 -- Create (p_zone_id null) or update a zone on a draft. On update a NULL argument leaves the field unchanged;
