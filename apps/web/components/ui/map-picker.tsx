@@ -17,8 +17,10 @@ export type { MapMarker, MapPoint, MapZone } from './map-geometry.ts';
 
 export type MapPickerProps = {
   src: string;
-  width: number;
-  height: number;
+  // Pixel size of the map image. Pass them whenever known (no layout shift). null or undefined
+  // (older map versions streamed from the staff image route) sizes from the loaded image.
+  width?: number | null;
+  height?: number | null;
   value: MapPoint | null;
   onChange?: (value: MapPoint | null, zone: MapZone | null) => void;
   zones?: readonly MapZone[];
@@ -113,7 +115,24 @@ export function MapPicker({
   const [cross, setCross] = useState<MapPoint>(value ?? { x: 0.5, y: 0.5 });
   const [message, setMessage] = useState('');
   const [dropKey, setDropKey] = useState(0);
+  const [natural, setNatural] = useState<{ src: string; w: number; h: number } | null>(null);
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const known = Boolean(width && width > 0 && height && height > 0);
+  const nat = natural && natural.src === src ? natural : null;
+  const w = known ? (width as number) : (nat?.w ?? 0);
+  const h = known ? (height as number) : (nat?.h ?? 0);
+  const sized = w > 0 && h > 0;
+
+  function readNatural(img: HTMLImageElement | null) {
+    if (known || !img || !img.complete || img.naturalWidth === 0) return;
+    setNatural({ src, w: img.naturalWidth, h: img.naturalHeight });
+  }
+
+  // A cached image can finish loading before hydration, when onLoad is not attached yet.
+  useEffect(() => {
+    readNatural(imgRef.current);
+  }, [src, known]);
 
   // Follow external value changes (zone select, reset by the page).
   useEffect(() => {
@@ -127,13 +146,13 @@ export function MapPicker({
     [],
   );
 
-  const zone = nearestZone(zones, value, width, height);
+  const zone = nearestZone(zones, value, w, h);
   const highlighted = highlightZoneId ? zones.find((z) => z.id === highlightZoneId) ?? null : null;
   const interactive = !readOnly;
 
   function place(p: MapPoint, spoken?: string) {
     const next = { x: round4(clamp01(p.x)), y: round4(clamp01(p.y)) };
-    const z = nearestZone(zones, next, width, height);
+    const z = nearestZone(zones, next, w, h);
     setCross(next);
     setDropKey((k) => k + 1);
     if (moveTimer.current) clearTimeout(moveTimer.current);
@@ -176,7 +195,7 @@ export function MapPicker({
     setCross(next);
     if (moveTimer.current) clearTimeout(moveTimer.current);
     moveTimer.current = setTimeout(() => {
-      setMessage(`Crosshair ${describe(next, nearestZone(zones, next, width, height))}. Press Enter to place the pin.`);
+      setMessage(`Crosshair ${describe(next, nearestZone(zones, next, w, h))}. Press Enter to place the pin.`);
     }, 450);
   }
 
@@ -214,9 +233,19 @@ export function MapPicker({
         onClick={interactive ? onClick : undefined}
         onKeyDown={interactive ? onKeyDown : undefined}
       >
-        <img src={src} width={width} height={height} alt="" draggable={false} loading={priority ? 'eager' : 'lazy'} decoding="async" />
-        {showZones ? zones.map((z) => <ZoneShape key={z.id} zone={z} width={width} height={height} highlight={z.id === highlightZoneId} />) : null}
-        {!showZones && highlighted ? <ZoneShape zone={highlighted} width={width} height={height} highlight /> : null}
+        <img
+          ref={imgRef}
+          src={src}
+          width={known ? (width as number) : undefined}
+          height={known ? (height as number) : undefined}
+          alt=""
+          draggable={false}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          onLoad={(e) => readNatural(e.currentTarget)}
+        />
+        {sized && showZones ? zones.map((z) => <ZoneShape key={z.id} zone={z} width={w} height={h} highlight={z.id === highlightZoneId} />) : null}
+        {sized && !showZones && highlighted ? <ZoneShape zone={highlighted} width={w} height={h} highlight /> : null}
         {markers.map((m) => (
           <span key={m.id} className="map-poi" style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}>
             <IconBuilding size={14} />

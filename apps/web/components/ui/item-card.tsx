@@ -1,6 +1,8 @@
 // ItemCard: one found item in a feed, search results, matches, or staff lists.
 // - The thumb is a fixed 1:1 box with explicit width/height, so loading never shifts layout.
 // - The description is the link text; the whole card is clickable through a stretched link.
+//   Never wrap the card (or any article or landmark) in <a>: Chrome then computes no name for
+//   the link. Buttons go in `actions`, which sits above the stretched link.
 // - Public data only: zone name (never the exact pin), custody line, public ID.
 // Pass `priority` for the first row of a feed (the LCP image) and nowhere else.
 import type { Custody } from '@recover/shared/dto.ts';
@@ -23,8 +25,13 @@ export type ItemCardProps = {
   locationName?: string | null;
   // Preformatted by the page in the school's time zone, for example "Found Sep 29".
   foundLabel?: string;
+  // Replaces the custody line, for example "At another school (SFHS)" in cross-school results.
+  custodyLabel?: string;
   // Extra badges (StatusBadge, "New match").
   status?: ReactNode;
+  // Buttons or links of their own ("This is it", "View listing"). They sit above the card link,
+  // so they stay separately clickable and the markup stays valid (the link wraps only the title).
+  actions?: ReactNode;
   priority?: boolean;
   headingLevel?: 2 | 3 | 4;
   variant?: 'grid' | 'row';
@@ -68,11 +75,13 @@ export function ItemCard({
   custody,
   locationName,
   foundLabel,
+  custodyLabel,
   status,
+  actions,
   priority = false,
   headingLevel = 3,
   variant = 'grid',
-  as: Tag = 'article',
+  as: Tag = 'div',
   className,
 }: ItemCardProps) {
   const H = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
@@ -126,7 +135,7 @@ export function ItemCard({
           ) : null}
           <li className="item-card-custody" data-custody={custody}>
             <CustodyIcon custody={custody} />
-            <span>{custodyLine(custody, locationName)}</span>
+            <span>{custodyLabel ?? custodyLine(custody, locationName)}</span>
           </li>
           {foundLabel ? (
             <li>
@@ -142,6 +151,7 @@ export function ItemCard({
             {publicId}
           </p>
         ) : null}
+        {actions ? <div className="item-card-actions">{actions}</div> : null}
       </div>
     </Tag>
   );

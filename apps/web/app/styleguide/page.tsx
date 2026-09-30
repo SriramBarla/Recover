@@ -23,7 +23,7 @@ import { SchoolSwitcher } from '@/components/ui/school-switcher.tsx';
 import { Select } from '@/components/ui/select.tsx';
 import { Loading, SkeletonItemCard, SkeletonText, Skeleton } from '@/components/ui/skeleton.tsx';
 import { Stat, StatGrid } from '@/components/ui/stat.tsx';
-import { FlagChip, StatusBadge, type StatusKind } from '@/components/ui/status-badge.tsx';
+import { FlagChip, StatusBadge, flagKeys, type StatusKind } from '@/components/ui/status-badge.tsx';
 import { Stepper } from '@/components/ui/stepper.tsx';
 import { SubNav } from '@/components/ui/sub-nav.tsx';
 import { Table } from '@/components/ui/table.tsx';
@@ -39,6 +39,7 @@ import {
   MapPickerDemo,
   PhotoCaptureDemo,
   PrimaryConfirmDemo,
+  ReauthConfirmDemo,
   TextAreaDemo,
   TileToggleDemo,
   ZoneEditorDemo,
@@ -375,7 +376,10 @@ export default function StyleguidePage() {
               </ChipGroup>
               <ChipToggleDemo />
               <div className="chips">
-                {['nsfw', 'has_face', 'has_text', 'contact_info', 'duplicate', 'repeat_device', 'screening_error'].map((f) => (
+                {flagKeys(
+                  ['nsfw', 'has_face', 'has_text', 'contact_info', 'duplicate', 'repeat_device', 'screening_error', 'ceiling', 'hold', 'new_signal', 'quarantine'],
+                  'unscreened',
+                ).map((f) => (
                   <FlagChip key={f} flag={f} />
                 ))}
               </div>
@@ -664,6 +668,27 @@ export default function StyleguidePage() {
                     custody="at_location"
                     locationName="Main Office"
                     status={<Badge tone="accent" icon={<I.IconBell />}>New match</Badge>}
+                    actions={
+                      <>
+                        <Button size="sm" variant="primary" icon={<I.IconCheck />}>
+                          This is it
+                        </Button>
+                        <LinkButton size="sm" variant="ghost" href="#items" iconEnd={<I.IconChevronRight />}>
+                          View listing
+                        </LinkButton>
+                      </>
+                    }
+                  />
+                </li>
+                <li>
+                  <ItemCard
+                    variant="row"
+                    href="#items"
+                    publicId="SFHS-M-000057"
+                    category="sports"
+                    description="Black soccer shin guards"
+                    custody="at_location"
+                    custodyLabel="At another school (SFHS)"
                   />
                 </li>
                 <li>
@@ -696,8 +721,8 @@ export default function StyleguidePage() {
               <MapPickerDemo />
               <div className="sg-two">
                 <div>
-                  <Sub>Staff review: exact pin, read-only</Sub>
-                  <MapPicker src={CAMPUS_MAP} width={MAP_WIDTH} height={MAP_HEIGHT} value={{ x: 0.84, y: 0.26 }} zones={DEMO_ZONES} readOnly label="Finder's pin" />
+                  <Sub>Staff review: exact pin, read-only, size unknown</Sub>
+                  <MapPicker src={CAMPUS_MAP} width={null} height={null} value={{ x: 0.84, y: 0.26 }} zones={DEMO_ZONES} readOnly label="Finder's pin" />
                 </div>
                 <div>
                   <Sub>Public listing: zone only, never the pin</Sub>
@@ -729,6 +754,7 @@ export default function StyleguidePage() {
             <div className="sg-row">
               <ConfirmDemo />
               <ConfirmDemo fail />
+              <ReauthConfirmDemo />
               <BulkConfirmDemo />
               <PrimaryConfirmDemo />
             </div>

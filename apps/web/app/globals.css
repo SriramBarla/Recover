@@ -454,6 +454,31 @@ samp {
   height: 100%;
 }
 
+/* Reflow at 320px (WCAG 1.4.10): grid and flex children may shrink below their content, and long
+   ids, emails, and file names wrap instead of widening the page. */
+.grid > *,
+.grid-wide > *,
+.item-grid > *,
+.item-list > *,
+.kpis > *,
+.tile-grid > *,
+.photo-slots > *,
+.row > *,
+.spread > * {
+  min-width: 0;
+}
+dt,
+dd,
+.desc,
+.table td {
+  overflow-wrap: anywhere;
+}
+dt,
+dd,
+.desc {
+  min-width: 0;
+}
+
 /* ========================================================================
    7. Top bar, brand, navigation, school context
    ======================================================================== */
@@ -947,6 +972,14 @@ details[open] > summary .school-switcher-chevron {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+.item-card-actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
 }
 .item-card-row {
   flex-direction: row;
@@ -1724,7 +1757,7 @@ button.chip-sm {
    ======================================================================== */
 .kv {
   display: grid;
-  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  grid-template-columns: fit-content(14rem) minmax(0, 1fr);
   gap: 0.5rem 1.25rem;
   margin: 0;
 }
@@ -2153,7 +2186,7 @@ button.chip-sm {
 }
 .photo-slots {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 ul.photo-slots {

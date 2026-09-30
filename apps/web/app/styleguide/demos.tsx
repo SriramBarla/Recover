@@ -219,6 +219,31 @@ export function ConfirmDemo({ fail = false }: { fail?: boolean }) {
   );
 }
 
+// Step-up: a 401 with reauth renders its own error with a sign-in link (the staff ActionError pattern).
+class DemoReauthError extends Error {
+  readonly reauth = true;
+}
+
+export function ReauthConfirmDemo() {
+  return (
+    <ConfirmAction
+      label="Delete item"
+      title="Delete FCHS-M-000214?"
+      description="Deleting removes a staff post made by mistake. It is audited and cannot be undone."
+      confirmLabel="Delete item"
+      onConfirm={() => new Promise<void>((_, reject) => setTimeout(() => reject(new DemoReauthError('For this action, sign in again first.')), 700))}
+      renderError={(e) => (
+        <p className="field-error" role="alert">
+          <span>
+            {e instanceof Error ? e.message : 'That did not work.'}{' '}
+            {e instanceof DemoReauthError ? <a href="#confirm">Sign in again</a> : null}
+          </span>
+        </p>
+      )}
+    />
+  );
+}
+
 export function BulkConfirmDemo() {
   return (
     <ConfirmAction

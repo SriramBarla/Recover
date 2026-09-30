@@ -1,9 +1,9 @@
 // StatusBadge: one vocabulary for every state machine in Recover (§6), each state with an icon
 // and words, never color alone. `context` adds a spoken prefix ("Review: Approved") for places
-// without a column header. FlagChip names the queue's screening flags in plain words.
+// without a column header. FlagChip names the queue's screening flags in plain words; flagKeys
+// derives the flags a card shows from a StaffItemRow's flags and screeningStatus.
 import type { ReactNode } from 'react';
 import { badgeClass, type Tone } from './badge.tsx';
-import { Chip } from './chip.tsx';
 import {
   IconAlert,
   IconBuilding,
@@ -122,20 +122,37 @@ export function StatusBadge({
   );
 }
 
-export const FLAG_LABEL: Record<string, string> = {
-  nsfw: 'Possible nudity',
-  has_face: 'Face visible',
-  has_text: 'Text visible',
-  contact_info: 'Contact info',
-  duplicate: 'Possible duplicate',
-  repeat_device: 'Repeat device',
-  screening_error: 'Screening error',
+// Review-queue flags (§5.3 step 2), in the staff app's words. Unknown flags render neutral.
+export const FLAGS: Record<string, { label: string; tone: Tone }> = {
+  nsfw: { label: 'Possible explicit content', tone: 'danger' },
+  has_face: { label: 'Face visible', tone: 'warn' },
+  has_text: { label: 'Text visible', tone: 'warn' },
+  contact_info: { label: 'Contact info', tone: 'danger' },
+  duplicate: { label: 'Possible duplicate', tone: 'warn' },
+  repeat_device: { label: 'Repeat device', tone: 'warn' },
+  screening_error: { label: 'Screening failed', tone: 'warn' },
+  ceiling: { label: 'Not screened (daily limit)', tone: 'warn' },
+  unscreened: { label: 'Screening pending', tone: 'neutral' },
+  hold: { label: 'Held for confirmation', tone: 'warn' },
 };
 
-export function FlagChip({ flag, size = 'sm' }: { flag: string; size?: 'sm' | 'md' }) {
+// The flags a queue card shows: the row's flags (minus quarantine, which has its own banner) plus
+// the ones implied by screeningStatus.
+export function flagKeys(flags: readonly string[], screeningStatus?: string | null): string[] {
+  const keys = flags.filter((f) => f !== 'quarantine');
+  if (screeningStatus === 'unscreened' && !keys.includes('unscreened')) keys.push('unscreened');
+  if (screeningStatus === 'error' && !keys.includes('screening_error') && !keys.includes('ceiling')) keys.push('screening_error');
+  return keys;
+}
+
+export function FlagChip({ flag, size = 'md', className }: { flag: string; size?: 'md' | 'lg'; className?: string }) {
+  const def = FLAGS[flag];
+  const tone = def?.tone ?? 'neutral';
+  const Icon = tone === 'danger' ? IconAlert : tone === 'neutral' ? IconClock : IconFlag;
   return (
-    <Chip tone="flag" size={size} icon={<IconFlag size={14} />}>
-      {FLAG_LABEL[flag] ?? humanize(flag)}
-    </Chip>
+    <span className={badgeClass(tone, size, className)} data-flag={flag}>
+      <Icon size={size === 'lg' ? 16 : 14} />
+      {def?.label ?? humanize(flag)}
+    </span>
   );
 }

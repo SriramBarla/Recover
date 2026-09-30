@@ -24,6 +24,9 @@ export type ConfirmActionProps = {
   confirmDisabled?: boolean;
   // Called when the dialog opens, to reset extra fields.
   onOpen?: () => void;
+  // Renders a rejected onConfirm inside the open dialog (for example an error with a "Sign in
+  // again" link for step-up). Default: the error's message in a role="alert" line.
+  renderError?: (error: unknown) => ReactNode;
   tone?: 'danger' | 'primary';
   triggerVariant?: ButtonVariant;
   triggerSize?: ButtonSize;
@@ -46,6 +49,7 @@ export function ConfirmAction({
   acknowledge,
   confirmDisabled = false,
   onOpen,
+  renderError,
   tone = 'danger',
   triggerVariant,
   triggerSize = 'md',
@@ -58,7 +62,8 @@ export function ConfirmAction({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Wrapped so a thrown falsy value still counts as a failure.
+  const [error, setError] = useState<{ value: unknown } | null>(null);
   const [acked, setAcked] = useState(false);
   const id = useId();
   const titleId = `${id}-title`;
@@ -97,7 +102,7 @@ export function ConfirmAction({
       await onConfirm();
       close();
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : 'That did not work. Try again.');
+      setError({ value: e });
     } finally {
       setPending(false);
     }
@@ -155,9 +160,13 @@ export function ConfirmAction({
                 </label>
               ) : null}
               {error ? (
-                <p className="field-error" role="alert">
-                  {error}
-                </p>
+                renderError ? (
+                  renderError(error.value)
+                ) : (
+                  <p className="field-error" role="alert">
+                    {error.value instanceof Error && error.value.message ? error.value.message : 'That did not work. Try again.'}
+                  </p>
+                )
               ) : null}
             </div>
           ) : null}
