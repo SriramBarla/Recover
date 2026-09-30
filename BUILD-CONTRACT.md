@@ -600,3 +600,34 @@ Remote: `origin` = https://github.com/SriramBarla/Recover (PUBLIC). Never commit
 5. **The lead merges.** Agents do not merge. The lead merges PRs in dependency order, resolving conflicts, with `gh pr merge <n> --merge --delete-branch`.
 6. **Stay in your lane.** If you need a change in a file you do not own, describe it in the PR body and final report. Do not edit it.
 7. **Dependencies in a worktree.** A fresh worktree has no `node_modules`. Link the main checkout's copy with `ln -s /Users/sriram_barla/Desktop/Recover/Recover/node_modules node_modules` at the worktree root. Never run `npm install`.
+
+## 13. Additions made during the build (authoritative)
+
+These were agreed between agents while building and are now part of the contract.
+
+**SQL, staff side**
+- `api_staff_custody_list(p_assert, p_school_code, p_location_id)` has operation `item.read` and a null target. It returns `{expected, atLocation, dispositionDue}`, each a `StaffItemRow[]` of at most 200 rows. Quarantined items are shown to school_admin and above only.
+- The staff operation, scope, and target table in `apps/web/lib/ops.ts` (`FNS`) is authoritative for every `api_staff_*` and `api_district_*` call.
+
+**SQL, system side**
+- `system_screening_targets(p_item_id, p_policy_version)` returns `{photos:[{photoId, originalPath}]}`: current photos in `canonical_ready` or `public_ready` that have no screening run for that policy yet.
+- `system_media_ticket_redeem` also returns `itemId` and `publicPath`.
+- `system_deletion_objects` rows also carry `found`, `schoolId`, `itemId`, and `currentPath`.
+- `system_purge` kinds include `map_drafts`.
+- Redeeming a `map.upload` ticket schedules `canonicalize_map` 60 s later.
+
+**Rate limits**
+- The actions are `post_item`, `lost_report`, `search`, `status_poll`, and `search_all`. `search_all` has its own budget, the same size as `search`.
+- Counters are keyed per window (`<action>:<window>`), so the day and week post limits never share a row.
+
+**Deletion and publication rules**
+- The never-arrived deletion ledger uses reason `never_arrived`. A late check-in cancels only that reason.
+- `private.staff_publish_ready(force)` releases a hold, never a quarantine.
+- A late severe signal on a published item deletes the public variants and keeps the private originals for the incident responders.
+
+**Cache**
+- Staff mutations that change what students see (claim, dispose, pull, delete, edit, receive, transfer, photo drop) expire `school:<id>` synchronously with `revalidateTag(tag, { expire: 0 })`.
+- The outbox `invalidate_cache` job expires the same tags through `/api/internal/revalidate`.
+
+**Calendar**
+- `0011_calendar_recompute.sql` recomputes open arrival deadlines whenever `school_calendar_days`, or a school's `never_arrived_school_days` or timezone, changes (G-01).

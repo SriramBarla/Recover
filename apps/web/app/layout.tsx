@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'Recover',
   description: 'School lost and found',
   manifest: '/manifest.webmanifest',
+  icons: { icon: '/icons/icon.svg' },
   robots: { index: false, follow: false, nocache: true },
 };
 
