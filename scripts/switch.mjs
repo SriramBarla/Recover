@@ -75,7 +75,7 @@ function printState(say, { district, school }) {
   }
 }
 
-async function run({ values, positionals, apply, sql, requestId, say }) {
+export async function run({ values, positionals, apply, sql, requestId, say }) {
   const isDistrict = values.district === true;
   const code = values.school === undefined ? null : String(values.school).toUpperCase();
   if (isDistrict === Boolean(code)) throw new UsageError('give exactly one of --district or --school CODE');

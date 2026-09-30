@@ -164,10 +164,11 @@ export async function writeAudit(sql, { script, action, requestId, schoolId = nu
 // ---------- jobs ----------
 
 // Maintenance kinds an operator may enqueue by hand (contract section 7: payload {}, dedupe key
-// <kind>:<yyyy-mm-ddThh:mi> in UTC, so a cron enqueue in the same minute is deduplicated).
+// <kind>:<yyyy-mm-ddThh:mi> in UTC, the same key private.enqueue_periodic uses, so a cron enqueue in
+// the same minute is deduplicated).
 export const PERIODIC_KINDS = [
   'expire_never_arrived', 'mark_disposition_due', 'expire_reports', 'anonymize_rejected',
-  'clear_terminal_item_text', 'reconcile_generating', 'evaluate_alerts',
+  'clear_terminal_item_text', 'reconcile_generating', 'evaluate_alerts', 'purge_drafts', 'reconcile_orphan_uploads',
 ];
 
 // Kinds system_lease_jobs still leases while district_settings.worker_mode = 'quarantine' (G-06).
