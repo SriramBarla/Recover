@@ -81,19 +81,23 @@ npm run typecheck
 
 ## Build status
 
-| Area | Branch | State |
+The whole v1 app is merged and runs end to end on the local stack. Deployment needs the district accounts (see `docs/DEPLOY.md`).
+
+| Area | Pull requests | Verified by |
 |---|---|---|
-| Foundation (scaffold, contract, shared db/errors/dto/crypto/assertion) | `feat/foundation` | merged (#1) |
-| Database schema, roles, RLS, private helpers, seed | `feat/db-schema` | merged (#2) |
-| Dev tooling (dev runner, env generator, SQL test runner, map seeding) | `feat/dev-tooling` | merged (#3) |
-| CI (repo audit, typecheck + unit, SQL suite on local Supabase) | `feat/ci` | merged (#4, #5) |
-| Deployment guide and bootstrap template | `docs/deployment` | this change |
-| Shared modules (SigV4, Unicode, rate limits, logging, matcher) | `feat/shared-modules` | in progress |
-| Worker (jobs, media pipeline, screening, brokers) | `feat/worker` | in progress |
-| Student PWA | `feat/student-web` | in progress |
-| Staff and district apps | `feat/staff-web` | in progress |
-| SQL functions: student, staff/district, system + cron | `feat/sql-*` | in progress |
-| End-to-end integration tests | `feat/integration` | in progress |
+| Foundation, build contract, dev tooling, CI, deploy docs | #1-#7, #9 | CI on every PR |
+| Database schema, roles, RLS, private helpers | #2, #12 | 8/8 SQL suites on a fresh reset: privilege diff, 156 cross-school attempts rejected, every CHECK tested |
+| Shared modules (SigV4, Unicode, rate limits, logging, matcher) | #8 | 119 unit tests; the AWS SigV4 vectors |
+| SQL functions: student, staff, school admin, district, system and cron | #10, #11, #15, #16, #18 | 20 + 221 + 159 + 101 + 565 SQL checks |
+| Worker (job drain, media pipeline, screening, brokers) | #13 | 54 unit tests; live storage checks; empty 401 on unauthenticated probes |
+| Student PWA | #17 | JS 134-142 KB gzipped (budget 150 KB) |
+| Staff and district apps | #14 | 46 unit tests; assertion vector parity |
+| Ops runbooks and scripts (24 runbooks) | #20 | 36 unit tests; QR codes decode |
+| Browser E2E (Playwright) | #19 | 21/22 against the running stack |
+| Integration | #21 | end-to-end 15/15, from student post to verified deletion |
+| Design system and polish pass | `feat/design-system` | in progress |
+
+**Local performance check** (production build, 200 concurrent readers for 30 s): p95 was feed 3 ms, search 8 ms, listing 2 ms, meta 155 ms, with 0 errors. The staging run of `scripts/load.mjs` is still to do.
 
 ## Further reading
 
