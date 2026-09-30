@@ -65,6 +65,9 @@ create function pg_temp.queue(p_sub text, p_code text, p_cc text default null, p
 language sql as $$
   select public.api_staff_queue(pg_temp.a(p_sub, p_code, 'queue.read', null, null,
     jsonb_build_object('school_code', p_code, 'cursor_created', p_cc, 'cursor_id', p_cid)), p_code, p_cc, p_cid) $$;
+create function pg_temp.custody(p_sub text, p_code text, p_loc uuid) returns jsonb language sql as $$
+  select public.api_staff_custody_list(pg_temp.a(p_sub, p_code, 'item.read', null, null,
+    jsonb_build_object('school_code', p_code, 'location_id', p_loc)), p_code, p_loc) $$;
 create function pg_temp.get(p_sub text, p_code text, p_item uuid) returns jsonb language sql as $$
   select public.api_staff_item_get(pg_temp.a(p_sub, p_code, 'item.read', p_item, null,
     jsonb_build_object('school_code', p_code, 'item_id', p_item)), p_code, p_item) $$;
@@ -759,7 +762,7 @@ begin
   perform pg_temp.exec(format($f$update public.items set terminal_at = now() - interval '10 days',
                                    withdrawn_at = now() - interval '10 days' where id = %L$f$, v_old));
   v_ledger := pg_temp.n(format($f$select private.create_deletion_ledger(%L, '0a0a0a0a-0000-4000-8000-000000000001',
-                                   'expired_never_arrived', null, now() + interval '6 days')$f$, v));
+                                   'never_arrived', null, now() + interval '6 days')$f$, v));
   perform pg_temp.ok(v_ledger is not null, 'late: fixture ledger');
 
   perform pg_temp.eq(pg_temp.err(format('select pg_temp.receive(%L, %L, %L, %s, %L)', 'sapi-fchs-office', 'FCHS', v_old,
@@ -1082,7 +1085,78 @@ begin
 end $$;
 
 -- =====================================================================================================
--- 14. surface: every audit row written above is free of forbidden keys; login role has no table access
+-- 14. custody list: expected arrivals, at location, disposition due (§5.4 custody page)
+-- =====================================================================================================
+do $$
+declare
+  v_a uuid := pg_temp.loc('SFHS', 'A');
+  e1 uuid := pg_temp.mk_item('SFHS', 'A', 'pending', 'hidden', 'with_finder');
+  e2 uuid := pg_temp.mk_item('SFHS', 'A', 'approved', 'published', 'with_finder', '{public_ready}');
+  e3 uuid := pg_temp.mk_item('SFHS', 'A', 'pending', 'hidden', 'with_finder');
+  eq uuid := pg_temp.mk_item('SFHS', 'A', 'pending', 'hidden', 'with_finder');
+  d0 uuid := pg_temp.mk_item('SFHS', 'A', 'draft', 'hidden', 'with_finder', '{uploaded}');
+  a1 uuid := pg_temp.mk_item('SFHS', 'A', 'approved', 'hidden', 'at_location');
+  a2 uuid := pg_temp.mk_item('SFHS', 'A', 'pending', 'hidden', 'at_location');
+  adel uuid := pg_temp.mk_item('SFHS', 'A', 'approved', 'hidden', 'at_location');
+  due1 uuid := pg_temp.mk_item('SFHS', 'A', 'approved', 'hidden', 'at_location');
+  due2 uuid := pg_temp.mk_item('SFHS', 'A', 'approved', 'hidden', 'at_location');
+  am uuid := pg_temp.mk_item('SFHS', 'M', 'approved', 'hidden', 'at_location');
+  r jsonb;
+begin
+  perform pg_temp.exec(format($f$
+    update public.items set arrival_deadline_at = now() + interval '2 days' where id = %L;
+    update public.items set arrival_deadline_at = now() + interval '1 day' where id = %L;
+    update public.items set arrival_deadline_at = null where id = %L;
+    update public.items set arrival_deadline_at = now() + interval '3 days', screening_status = 'flagged',
+                            screening_flags = '{"quarantine": true}' where id = %L;
+    update public.items set received_at = now() - interval '1 hour' where id = %L;
+    update public.items set received_at = now() - interval '3 days' where id = %L;
+    update public.items set deleted_at = now() where id = %L;
+    update public.items set received_at = now() - interval '40 days', disposition_due_at = now() - interval '2 days'
+     where id = %L;
+    update public.items set received_at = now() - interval '35 days', disposition_due_at = now() - interval '1 day'
+     where id = %L;$f$, e1, e2, e3, eq, a1, a2, adel, due1, due2));
+
+  -- office (sapi-multi at SFHS): no quarantined rows
+  r := pg_temp.custody('sapi-multi', 'SFHS', v_a);
+  perform pg_temp.eq((select string_agg(x->>'id', ',' order by n) from jsonb_array_elements(r->'expected')
+                        with ordinality as t(x, n)), concat_ws(',', e2, e1, e3),
+                     'custody: expected by arrival deadline, nulls last; no draft; no quarantine for office');
+  perform pg_temp.eq((select string_agg(x->>'id', ',' order by n) from jsonb_array_elements(r->'atLocation')
+                        with ordinality as t(x, n)), concat_ws(',', a1, a2, due2, due1),
+                     'custody: at location newest received first; deleted excluded');
+  perform pg_temp.eq((select string_agg(x->>'id', ',' order by n) from jsonb_array_elements(r->'dispositionDue')
+                        with ordinality as t(x, n)), concat_ws(',', due1, due2), 'custody: disposition due oldest first');
+  perform pg_temp.eq((select string_agg(k, ',' order by k) from jsonb_object_keys(r#>'{atLocation,0}') k),
+                     (select string_agg(k, ',' order by k)
+                        from jsonb_object_keys(pg_temp.get('sapi-multi', 'SFHS', a1)) k),
+                     'custody: rows are StaffItemRow (same keys as item_get)');
+  perform pg_temp.eq(r#>>'{atLocation,0,rowVersion}', (pg_temp.rv(a1))::text, 'custody: row version for the next action');
+
+  -- school_admin sees the quarantined arrival; no location filter spans the school
+  r := pg_temp.custody('sapi-sfhs-admin', 'SFHS', v_a);
+  perform pg_temp.eq((select string_agg(x->>'id', ',' order by n) from jsonb_array_elements(r->'expected')
+                        with ordinality as t(x, n)), concat_ws(',', e2, e1, eq, e3), 'custody: quarantine for school_admin');
+  r := pg_temp.custody('sapi-sfhs-admin', 'SFHS', null);
+  perform pg_temp.ok(exists (select 1 from jsonb_array_elements(r->'atLocation') x where x->>'id' = am::text)
+                     and exists (select 1 from jsonb_array_elements(r->'atLocation') x where x->>'id' = a1::text),
+                     'custody: no filter covers every location');
+  perform pg_temp.ok(not exists (select 1 from jsonb_array_elements(r->'expected') x where x->>'id' = d0::text),
+                     'custody: drafts never listed');
+
+  perform pg_temp.eq(pg_temp.err(format('select pg_temp.custody(%L, %L, %L)', 'sapi-sfhs-admin', 'SFHS',
+                                        pg_temp.loc('FCHS', 'W'))), 'invalid_input/location_id',
+                     'custody: location must belong to the school');
+  perform pg_temp.eq(pg_temp.err(format('select pg_temp.custody(%L, %L, null)', 'sapi-fchs-reviewer', 'SFHS')),
+                     'forbidden', 'custody: other-school staff');
+  perform pg_temp.eq(pg_temp.err(format('select public.api_staff_custody_list(pg_temp.a(%L, %L, %L, %L, null, %L), %L, null)',
+                                        'sapi-multi', 'SFHS', 'item.read', a1,
+                                        jsonb_build_object('school_code', 'SFHS', 'location_id', null), 'SFHS')),
+                     'assertion_invalid', 'custody: target must be null');
+end $$;
+
+-- =====================================================================================================
+-- 15. surface: every audit row written above is free of forbidden keys; login role has no table access
 -- =====================================================================================================
 do $$
 begin

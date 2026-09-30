@@ -1,7 +1,8 @@
 -- 0300 staff api family, part 1: identity, review, custody, item changes, staff posts, devices, media
 -- tickets, and lost reports (BUILD-CONTRACT sections 3, 5, 6.2; §5.3-§5.6, §6, Appendix C, §13.3, §14;
--- G-01, G-02, G-04, G-05, G-08, G-12, G-23, G-24, G-34, G-40, G-43). Roster, locations, maps, zones,
--- config, calendar, stats, and audit live in 0305_api_staff_admin.sql; district functions in 0310.
+-- G-01, G-02, G-04, G-05, G-08, G-12, G-23, G-24, G-34, G-40, G-43), plus the custody-page list.
+-- Roster, locations, maps, zones, config, calendar, stats, and audit live in 0305_api_staff_admin.sql;
+-- district functions in 0310.
 --
 -- Template for every public function: SECURITY DEFINER, search_path '', lock_timeout 3s (G-20), owner
 -- recover_api_owner, EXECUTE revoked from PUBLIC and granted to recover_web only. The first statement
@@ -523,6 +524,61 @@ begin
                        then (select jsonb_build_object('createdAt', i.created_at, 'id', i.id)
                                from public.items i where i.id = v_ids[50])
                   end);
+end $$;
+
+-- The custody page (§5.4; staff screen inventory "expected arrivals ... disposition-due list"): three
+-- StaffItemRow lists of at most 200 each, optionally narrowed to one location of this school.
+--   expected: with_finder, not draft, by dropoff location; earliest arrival deadline first (nulls last).
+--   atLocation: at_location, by current location; newest received first.
+--   dispositionDue: at_location with disposition_due_at, by current location; oldest due first.
+-- Deleted items never appear; quarantined items only for school_admin+ (the queue rule, G-24).
+create or replace function public.api_staff_custody_list(p_assert jsonb, p_school_code text, p_location_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = '' set lock_timeout = '3s' as $$
+declare
+  s public.schools := private.school_by_code(p_school_code);
+  ctx private.staff_ctx;
+  v_admin boolean;
+begin
+  ctx := private.assert_staff(p_assert, 'item.read', s.id, null, null,
+    jsonb_build_object('school_code', p_school_code, 'location_id', p_location_id));
+  v_admin := private.role_rank(ctx.role) >= 3;
+  if p_location_id is not null and not exists (
+       select 1 from public.locations l where l.id = p_location_id and l.school_id = s.id) then
+    perform private.fail('invalid_input', 'location_id');
+  end if;
+
+  return jsonb_build_object(
+    'expected', (
+      select coalesce(jsonb_agg(private.sapi_item_json(q.id)
+                                order by q.arrival_deadline_at nulls last, q.created_at, q.id), '[]'::jsonb)
+        from (select i.id, i.arrival_deadline_at, i.created_at
+                from public.items i
+               where i.school_id = s.id and i.custody = 'with_finder' and i.review_status <> 'draft'
+                 and i.deleted_at is null
+                 and (p_location_id is null or i.dropoff_location_id = p_location_id)
+                 and (v_admin or not private.sapi_quarantined(i.screening_flags))
+               order by i.arrival_deadline_at nulls last, i.created_at, i.id
+               limit 200) q),
+    'atLocation', (
+      select coalesce(jsonb_agg(private.sapi_item_json(q.id) order by q.received_at desc, q.id), '[]'::jsonb)
+        from (select i.id, i.received_at
+                from public.items i
+               where i.school_id = s.id and i.custody = 'at_location' and i.deleted_at is null
+                 and (p_location_id is null or i.current_location_id = p_location_id)
+                 and (v_admin or not private.sapi_quarantined(i.screening_flags))
+               order by i.received_at desc, i.id
+               limit 200) q),
+    'dispositionDue', (
+      select coalesce(jsonb_agg(private.sapi_item_json(q.id) order by q.disposition_due_at, q.id), '[]'::jsonb)
+        from (select i.id, i.disposition_due_at
+                from public.items i
+               where i.school_id = s.id and i.custody = 'at_location' and i.disposition_due_at is not null
+                 and i.deleted_at is null
+                 and (p_location_id is null or i.current_location_id = p_location_id)
+                 and (v_admin or not private.sapi_quarantined(i.screening_flags))
+               order by i.disposition_due_at, i.id
+               limit 200) q));
 end $$;
 
 create or replace function public.api_staff_item_get(p_assert jsonb, p_school_code text, p_item_id uuid)
@@ -1465,6 +1521,7 @@ end $$;
 alter function public.api_staff_bind_identity(jsonb, text, text) owner to recover_api_owner;
 alter function public.api_staff_resolve_session(jsonb, text) owner to recover_api_owner;
 alter function public.api_staff_queue(jsonb, text, text, uuid) owner to recover_api_owner;
+alter function public.api_staff_custody_list(jsonb, text, uuid) owner to recover_api_owner;
 alter function public.api_staff_item_get(jsonb, text, uuid) owner to recover_api_owner;
 alter function public.api_staff_item_approve(jsonb, text, uuid, bigint, jsonb) owner to recover_api_owner;
 alter function public.api_staff_item_reject(jsonb, text, uuid, bigint, text) owner to recover_api_owner;
@@ -1491,6 +1548,7 @@ alter function public.api_staff_report_close(jsonb, text, uuid, bigint) owner to
 revoke all on function public.api_staff_bind_identity(jsonb, text, text) from public;
 revoke all on function public.api_staff_resolve_session(jsonb, text) from public;
 revoke all on function public.api_staff_queue(jsonb, text, text, uuid) from public;
+revoke all on function public.api_staff_custody_list(jsonb, text, uuid) from public;
 revoke all on function public.api_staff_item_get(jsonb, text, uuid) from public;
 revoke all on function public.api_staff_item_approve(jsonb, text, uuid, bigint, jsonb) from public;
 revoke all on function public.api_staff_item_reject(jsonb, text, uuid, bigint, text) from public;
@@ -1517,6 +1575,7 @@ revoke all on function public.api_staff_report_close(jsonb, text, uuid, bigint) 
 grant execute on function public.api_staff_bind_identity(jsonb, text, text) to recover_web;
 grant execute on function public.api_staff_resolve_session(jsonb, text) to recover_web;
 grant execute on function public.api_staff_queue(jsonb, text, text, uuid) to recover_web;
+grant execute on function public.api_staff_custody_list(jsonb, text, uuid) to recover_web;
 grant execute on function public.api_staff_item_get(jsonb, text, uuid) to recover_web;
 grant execute on function public.api_staff_item_approve(jsonb, text, uuid, bigint, jsonb) to recover_web;
 grant execute on function public.api_staff_item_reject(jsonb, text, uuid, bigint, text) to recover_web;
