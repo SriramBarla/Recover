@@ -39,6 +39,12 @@ Owner decisions of 2026-09-30:
 
 **Reset.** `supabase db reset` applies `supabase/migrations/*.sql` in filename order, then `supabase/seed.sql`.
 
+**Migrations after launch.**
+- **Before the first production apply**, a new migration may sort before `0999_final_revokes.sql`, as `0210`, `0220`, and `0410` do. A database that already ran `0999` then needs `supabase db reset`, because `0999` revoked the CREATE that an owner change needs.
+- **After it**, `supabase db push` refuses a migration numbered below the last one applied. So new migrations are numbered above `0999`: `1000_<name>.sql`, then `1001`, and so on.
+- **A post-launch migration that creates or re-owns functions** starts with `grant create on schema public, private to recover_api_owner, recover_system_owner, recover_attestation_owner;` and ends with the matching `revoke create`, as `0002` and `0999` do.
+- **What it creates gets the same revokes as `0999`**, from `public`, `anon`, `authenticated`, and `service_role`. Grants go only to the intended login role, and `privilege_diff.sql` lists them.
+
 ## 2. File ownership (do not edit files you do not own; report needed changes instead)
 
 | Owner | Files |
@@ -536,7 +542,8 @@ The web helper `apps/web/lib/worker.ts` adds the right header.
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | optional locally |
 | `RECOVER_DEV_LOGIN=1` | enables the dev Credentials login; refused when `VERCEL` is set |
 | `STAFF_ASSERTION_KEY_CURRENT`, `STAFF_ASSERTION_KEY_VERSION` | assertion minting (section 5) |
-| `DEVICE_KEY_V1`, `IP_KEY`, `SEARCH_KEY` | base64url 32-byte keys |
+| `DEVICE_KEY_CURRENT`, `DEVICE_KEY_PREVIOUS`, `DEVICE_KEY_V<n>` | device digest key versions: current (default 1), previous (only during a rotation window), and one base64url 32-byte key per version in use (section 13; RUNBOOK 21) |
+| `IP_KEY`, `SEARCH_KEY` | base64url 32-byte keys |
 | `WORKER_URL` | where the worker runs |
 | `WORKER_DEV_SECRET`, `RECOVER_DEV_AUTH=1` | dev-only worker authentication |
 | `STORAGE_PUBLIC_URL` | public object base URL |
