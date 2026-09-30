@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Fieldset, TextInput } from '@/components/ui/field.tsx';
+import { LiveRegion } from '@/components/ui/live-region.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { TextArea } from '@/components/ui/text-area.tsx';
 import { ConfirmButton } from './ConfirmButton.tsx';
 import { staffApi } from './client-api.ts';
 import type { DistrictSettings } from './shapes.ts';
@@ -40,72 +44,78 @@ export function DistrictSettingsForm({ settings }: { settings: DistrictSettings 
   const valid = floor >= 1 && ceiling >= floor && ceiling <= 365 && domainList.length > 0 && screeningCeiling >= 0;
 
   return (
-    <div className="card stack-lg">
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">Custody retention (days after check-in)</legend>
-        <div className="grid">
-          <label className="field">
-            <span className="label">Floor</span>
-            <input className="input" type="number" min={1} max={365} value={floor} onChange={(e) => setFloor(Number(e.target.value))} />
-          </label>
-          <label className="field">
-            <span className="label">Ceiling</span>
-            <input className="input" type="number" min={1} max={365} value={ceiling} onChange={(e) => setCeiling(Number(e.target.value))} aria-invalid={ceiling < floor} />
-          </label>
-        </div>
-        <p className="hint" style={{ margin: 0 }}>A new range is refused while a school is outside it; adjust that school first.</p>
-      </fieldset>
-      <label className="field">
-        <span className="label">Staff email domains (one per line)</span>
-        <textarea className="textarea mono" value={domains} onChange={(e) => setDomains(e.target.value)} aria-invalid={domainList.length === 0} />
-        <span className="hint">Exact domains only, for example district.k12.ga.us. Sign-in checks the whole domain, never a suffix.</span>
-      </label>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">Global switches (off overrides every school)</legend>
-        <label className="row">
+    <div className="card card-pad-lg stack-lg">
+      <Fieldset id="ds-retention" legend="Custody retention (days after check-in)" hint="A new range is refused while a school is outside it; adjust that school first." bodyClassName="fieldset-row">
+        <TextInput id="ds-floor" label="Floor" type="number" inputMode="numeric" min={1} max={365} value={floor} onChange={(e) => setFloor(Number(e.target.value))} className="input-number" />
+        <TextInput
+          id="ds-ceiling"
+          label="Ceiling"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={365}
+          value={ceiling}
+          onChange={(e) => setCeiling(Number(e.target.value))}
+          aria-invalid={ceiling < floor}
+          className="input-number"
+        />
+      </Fieldset>
+      <TextArea
+        id="ds-domains"
+        label="Staff email domains (one per line)"
+        className="mono"
+        value={domains}
+        onChange={(e) => setDomains(e.target.value)}
+        aria-invalid={domainList.length === 0}
+        hint="Exact domains only, for example district.k12.ga.us. Sign-in checks the whole domain, never a suffix."
+        fieldClassName="field-measure"
+      />
+      <Fieldset id="ds-switches" legend="Global switches (off overrides every school)">
+        <label className="choice">
           <input type="checkbox" checked={posting} onChange={(e) => setPosting(e.target.checked)} />
           Student posting
         </label>
-        <label className="row">
+        <label className="choice">
           <input type="checkbox" checked={lost} onChange={(e) => setLost(e.target.checked)} />
           Lost reports
         </label>
-        <label className="row">
+        <label className="choice">
           <input type="checkbox" checked={cross} onChange={(e) => setCross(e.target.checked)} />
           Cross-school search
         </label>
-      </fieldset>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">Photo screening</legend>
-        <label className="row">
+      </Fieldset>
+      <Fieldset id="ds-screening" legend="Photo screening">
+        <label className="choice">
           <input type="checkbox" checked={screening} onChange={(e) => setScreening(e.target.checked)} />
           Screening enabled
         </label>
-        <label className="field" style={{ maxWidth: '16rem' }}>
-          <span className="label">Daily image ceiling, district-wide</span>
-          <input className="input" type="number" min={0} value={screeningCeiling} onChange={(e) => setScreeningCeiling(Number(e.target.value))} />
-          <span className="hint">Over the ceiling, photos go to reviewers unscreened and flagged.</span>
-        </label>
-      </fieldset>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="label">Worker mode</legend>
-        <label className="row">
+        <TextInput
+          id="ds-screening-ceiling"
+          label="Daily image ceiling, district-wide"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={screeningCeiling}
+          onChange={(e) => setScreeningCeiling(Number(e.target.value))}
+          hint="Over the ceiling, photos go to reviewers unscreened and flagged."
+          className="input-number"
+        />
+      </Fieldset>
+      <Fieldset id="ds-worker" legend="Worker mode">
+        <label className="choice">
           <input type="radio" name="worker-mode" checked={workerMode === 'normal'} onChange={() => setWorkerMode('normal')} />
           Normal
         </label>
-        <label className="row">
+        <label className="choice">
           <input type="radio" name="worker-mode" checked={workerMode === 'quarantine'} onChange={() => setWorkerMode('quarantine')} />
           Quarantine (restore procedure: only reconciliation jobs run)
         </label>
         {workerMode === 'quarantine' && settings.workerMode !== 'quarantine' ? (
-          <div className="notice notice-danger">Quarantine stops publishing, matching, deletion, and every other background job until it is turned off. Use it only during a restore.</div>
+          <Notice tone="danger">Quarantine stops publishing, matching, deletion, and every other background job until it is turned off. Use it only during a restore.</Notice>
         ) : null}
-      </fieldset>
-      {saved ? (
-        <div className="notice notice-ok" role="status">
-          {saved}
-        </div>
-      ) : null}
+      </Fieldset>
+      <LiveRegion message={saved} />
+      {saved ? <Notice tone="success">{saved}</Notice> : null}
       <ConfirmButton
         label="Save district settings"
         prompt={`Save ${count} change${count === 1 ? '' : 's'} for every school? Needs a recent sign-in.`}

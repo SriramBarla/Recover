@@ -2,6 +2,10 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconPlus } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
 import { ActionError } from './ActionError.tsx';
 import { staffApi } from './client-api.ts';
 
@@ -51,44 +55,46 @@ export function SchoolsManager() {
   };
 
   return (
-    <form onSubmit={submit} className="card stack" aria-labelledby="new-school-h">
-      <h2 id="new-school-h">Add a school</h2>
-      <div className="grid">
-        <label className="field">
-          <span className="label">Code</span>
-          <input className="input mono" required pattern="[A-Za-z]{2,6}" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="FCHS" />
-          <span className="hint">2 to 6 letters; appears in links and item IDs.</span>
-        </label>
-        <label className="field">
-          <span className="label">Name</span>
-          <input className="input" required minLength={2} maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="label">Timezone</span>
-          <input className="input" required list="tz-list" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+    <form onSubmit={submit} className="card card-pad-lg stack" aria-labelledby="new-school-h">
+      <h2 id="new-school-h" className="with-icon">
+        <IconPlus />
+        Add a school
+      </h2>
+      <div className="grid-wide fields-align-end">
+        <TextInput
+          id="school-code"
+          label="Code"
+          className="mono"
+          required
+          pattern="[A-Za-z]{2,6}"
+          maxLength={6}
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="FCHS"
+          hint="2 to 6 letters; appears in links and item IDs."
+        />
+        <TextInput id="school-name" label="Name" required minLength={2} maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
+        <div>
+          <TextInput id="school-tz" label="Timezone" required list="tz-list" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
           <datalist id="tz-list">
             {TIMEZONES.map((t) => (
               <option key={t} value={t} />
             ))}
           </datalist>
-        </label>
-        <label className="field">
-          <span className="label">First school admin email</span>
-          <input className="input" type="email" required value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="label">Their name (optional)</span>
-          <input className="input" maxLength={80} value={adminName} onChange={(e) => setAdminName(e.target.value)} />
-        </label>
+        </div>
+        <TextInput id="school-admin-email" label="First school admin email" type="email" required value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
+        <TextInput id="school-admin-name" label="Their name" optional maxLength={80} value={adminName} onChange={(e) => setAdminName(e.target.value)} />
       </div>
-      <button type="submit" className="btn btn-primary" disabled={busy}>
-        {busy ? 'Creating...' : 'Create school'}
-      </button>
+      <div>
+        <Button type="submit" variant="primary" disabled={busy} icon={<IconPlus />}>
+          {busy ? 'Creating...' : 'Create school'}
+        </Button>
+      </div>
       <ActionError error={error} />
       {created ? (
-        <div className="notice notice-ok" role="status">
+        <Notice tone="success" live="polite">
           Created {created}. <a href={`/district/schools?school=${created}`}>Open its onboarding checklist</a>.
-        </div>
+        </Notice>
       ) : null}
     </form>
   );

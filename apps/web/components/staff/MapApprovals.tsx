@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge.tsx';
-import { IconMapPin } from '@/components/ui/icons.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconMap, IconMapPin } from '@/components/ui/icons.tsx';
 import { MapPicker } from '@/components/ui/map-picker.tsx';
 import { Notice } from '@/components/ui/notice.tsx';
 import { Select } from '@/components/ui/select.tsx';
@@ -20,7 +21,12 @@ export function MapApprovals({ maps }: { maps: PendingMap[] }) {
   const router = useRouter();
   const [done, setDone] = useState<Record<string, string>>({});
 
-  if (maps.length === 0) return <p className="muted">No maps are waiting for approval.</p>;
+  if (maps.length === 0)
+    return (
+      <EmptyState icon={<IconMap />} title="No maps are waiting for approval.">
+        Schools submit drafts from their Map page. They show up here for the safety review.
+      </EmptyState>
+    );
 
   return (
     <ul className="stack-lg" style={{ listStyle: 'none', padding: 0 }}>

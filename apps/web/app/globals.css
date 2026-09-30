@@ -369,12 +369,13 @@ samp {
 .text-danger {
   color: var(--danger);
 }
-/* An icon next to text that stays on one line (table cells, headings, list rows). */
+/* An icon next to text (table cells, headings, list rows). Short labels stay on one line; a long
+   name (a school, a location) wraps beside the icon instead of pushing the page wider than 320px. */
 .with-icon {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  white-space: nowrap;
+  min-width: 0;
 }
 .with-icon svg {
   color: var(--muted);
@@ -1415,6 +1416,35 @@ details[open] > summary .school-switcher-chevron {
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+.fieldset-body.fieldset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1.25rem;
+}
+.field-measure {
+  max-width: var(--measure);
+}
+/* Onboarding checklist: numbered steps with a status badge; done steps recede. */
+.checklist {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding-left: 1.5rem;
+}
+.checklist > li::marker {
+  color: var(--muted);
+  font-weight: 700;
+}
+.checklist-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+}
+.checklist > li[data-done='true'] .checklist-label {
+  color: var(--muted);
+}
 .choice {
   display: flex;
   align-items: flex-start;
@@ -1441,7 +1471,12 @@ details[open] > summary .school-switcher-chevron {
 }
 /* Numbers are short: keep their inputs short so the field reads as a number. */
 .input.input-number {
-  max-width: 10rem;
+  width: 9rem;
+  max-width: 100%;
+}
+/* A row of fields where one has a hint: line the inputs up along the bottom. */
+.fields-align-end {
+  align-items: end;
 }
 /* File inputs: the picker button matches the secondary button. */
 .input[type='file'] {
@@ -1751,6 +1786,18 @@ button.chip-sm {
   margin: 0 0 0.15rem;
   font-weight: 700;
 }
+.notice-title .badge {
+  margin-left: 0.5rem;
+  vertical-align: 0.1em;
+}
+/* District alerts: one notice per alert. */
+.alert-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
 .notice-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2000,9 +2047,19 @@ button.chip-sm {
   background: var(--surface-2);
 }
 .table tbody tr[aria-selected='true'],
-.table tbody tr[data-selected='true'] {
+.table tbody tr[data-selected='true'],
+.table tbody tr[aria-current='true'] {
   background: var(--brand-soft);
   box-shadow: inset 4px 0 0 var(--brand);
+}
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+.table .link-row {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .table .num {
   text-align: right;
@@ -2202,7 +2259,11 @@ button.chip-sm {
   font-weight: 500;
 }
 .kpi .kpi-hint {
-  margin-top: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.35rem;
   font-size: var(--text-xs);
   color: var(--muted);
 }

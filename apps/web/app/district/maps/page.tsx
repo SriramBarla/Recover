@@ -1,6 +1,7 @@
 // /district/maps: map versions waiting for district approval, with preview, activate, and send back
 // (§5.6; §24 step 3; G-07).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { MapApprovals } from '@/components/staff/MapApprovals.tsx';
 import { pendingMapsOf } from '@/components/staff/shapes.ts';
@@ -24,10 +25,10 @@ export default async function DistrictMaps() {
 
   return (
     <>
-      <div className="stack">
-        <h1>Map approvals</h1>
-        <p className="muted">Schools prepare drafts; only the district publishes a map. Review the image and every public zone label before activating.</p>
-      </div>
+      <PageHeader
+        title={<>Map approvals</>}
+        description={<>Schools prepare drafts; only the district publishes a map. Review the image and every public zone label before activating.</>}
+      />
       {pending.ok ? <MapApprovals maps={maps} /> : <ErrorNotice code={pending.code} what="Pending maps" signinHref={signinPath('/district/maps')} />}
     </>
   );
