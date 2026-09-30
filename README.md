@@ -83,10 +83,20 @@ npm run typecheck
 
 | Area | Branch | State |
 |---|---|---|
-| Foundation (scaffold, contract, shared db/errors/dto/crypto/assertion) | `feat/foundation` | in progress |
-| Database schema, roles, RLS | `feat/db-schema` | planned |
-| SQL functions: student, staff/district, system | `feat/sql-*` | planned |
-| Shared modules (SigV4, Unicode, rate limits, logging, matcher) | `feat/shared-modules` | planned |
-| Worker (jobs, media pipeline, screening) | `feat/worker` | planned |
-| Student PWA | `feat/student-web` | planned |
-| Staff and district apps | `feat/staff-web` | planned |
+| Foundation (scaffold, contract, shared db/errors/dto/crypto/assertion) | `feat/foundation` | merged (#1) |
+| Database schema, roles, RLS, private helpers, seed | `feat/db-schema` | merged (#2) |
+| Dev tooling (dev runner, env generator, SQL test runner, map seeding) | `feat/dev-tooling` | merged (#3) |
+| CI (repo audit, typecheck + unit, SQL suite on local Supabase) | `feat/ci` | merged (#4, #5) |
+| Deployment guide and bootstrap template | `docs/deployment` | this change |
+| Shared modules (SigV4, Unicode, rate limits, logging, matcher) | `feat/shared-modules` | in progress |
+| Worker (jobs, media pipeline, screening, brokers) | `feat/worker` | in progress |
+| Student PWA | `feat/student-web` | in progress |
+| Staff and district apps | `feat/staff-web` | in progress |
+| SQL functions: student, staff/district, system + cron | `feat/sql-*` | in progress |
+| End-to-end integration tests | `feat/integration` | in progress |
+
+## Further reading
+
+- [`BUILD-CONTRACT.md`](BUILD-CONTRACT.md): function catalog, routes, jobs, environment, and the decisions applied to the specification.
+- [`docs/DEPLOY.md`](docs/DEPLOY.md): Supabase, Vercel, and Google Cloud setup, then smoke tests.
+- [`.env.example`](.env.example): every environment variable, with its purpose.
