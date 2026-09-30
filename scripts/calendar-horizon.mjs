@@ -18,7 +18,7 @@ Common options: --db <url> (else env DB_URL, .env.local, local stack), --dry-run
 const WARN_DAYS = 45;
 const ONBOARDING_DAYS = 90;
 const MAX_AHEAD_DAYS = 800;
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/; // 7:30, 07:30 or 07:30:00
 const TRUE = new Set(['true', 't', 'yes', 'y', '1', 'open']);
 const FALSE = new Set(['false', 'f', 'no', 'n', '0', 'closed']);
 
@@ -38,7 +38,7 @@ export function horizon(today, days) {
   return { days: n, coveredThrough: n ? addDays(today, n) : null };
 }
 
-const hms = (m) => `${m[1]}:${m[2]}:${m[3] ?? '00'}`;
+const hms = (m) => `${m[1].padStart(2, '0')}:${m[2]}:${m[3] ?? '00'}`;
 
 // Returns {rows: [{day, is_open, open_at, close_at, line}], errors: [text]}; times as HH:MM:SS.
 export function parseCalendarCsv(text) {
