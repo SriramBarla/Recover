@@ -1,4 +1,4 @@
-// POST /api/jobs/run (§8.3; BUILD-CONTRACT.md section 9.3). Scheduler bearer only (pg_cron -> pg_net,
+// POST /api/jobs/run (§8.3; BUILD-CONTRACT.md section 9.3). Scheduler bearer only (pg_cron -> http,
 // or the dev scheduler). Drains leased jobs for up to 50 s and returns the counts.
 import { requireScheduler } from '@/lib/auth.ts';
 import { sys } from '@/lib/db.ts';
