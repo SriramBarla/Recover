@@ -138,7 +138,8 @@ test('google mode: 429 and 5xx retry, 400 is permanent, partial results are kept
   const partial = await run(() => Response.json({ responses: [{ ...safe('VERY_UNLIKELY', 'LIKELY', 'VERY_UNLIKELY'), error: { code: 13 } }] }));
   assert.equal(partial.status, 'partial');
   assert.equal(partial.signals.nsfw, true);
-  assert.deepEqual(partial.signals.missing, ['face', 'text']);
+  assert.deepEqual([partial.signals.missing_safe_search, partial.signals.missing_face, partial.signals.missing_text], [undefined, true, true]);
+  assert.ok(Object.values(partial.signals).every((v) => typeof v === 'boolean' || typeof v === 'number'), 'scalar signals only');
   clearTokenCache();
   await assert.rejects(createVision({ mode: 'google', oidcToken: null, gcp, fetch: fakeGoogle(() => Response.json({})).fetchImpl }).screen(jpeg), (e) => e instanceof RetryableError && e.code === 'provider_auth');
   await assert.rejects(createVision({ mode: 'google', oidcToken: 't', gcp: null }).screen(jpeg), (e) => e instanceof RetryableError && e.code === 'provider_config');

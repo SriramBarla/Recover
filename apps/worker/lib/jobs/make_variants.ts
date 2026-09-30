@@ -1,9 +1,9 @@
 // make_variants {itemId} (§9.4; 09 catalog; F-18, F-98, F-107). Variants come only from canonical
 // originals and live under the per-generation public object token, generated once in SQL and stored
-// before the first upload, so a replay rewrites identical bytes to the same unpublished path.
-// Publication is then attempted directly; system_finalize_publish is a no-op until every current photo
-// is public_ready.
-import { canonicalFor, variantKey } from '../keys.ts';
+// before the first upload, so a replay rewrites identical bytes to the same still-unpublished path.
+// Generations already public_ready are skipped: a public path is never overwritten. Publication is then
+// attempted directly; system_finalize_publish is a no-op until every current photo is public_ready.
+import { canonicalFor, idOf, refused, variantKey } from '../keys.ts';
 import { MAX_CANONICAL_BYTES } from '../media/canonicalize.ts';
 import { variants } from '../media/variants.ts';
 import type { VariantTarget } from '../sys-types.ts';
@@ -13,11 +13,19 @@ import type { JobCtx, Payload } from './types.ts';
 
 export const kind = 'make_variants';
 
+type Targets = { generating?: boolean; schoolId?: string; photos?: VariantTarget[] } | null;
+
 export async function run(p: Payload, ctx: JobCtx): Promise<void> {
   const itemId = uuidField(p, 'itemId');
-  const t = await ctx.sys<{ photos?: VariantTarget[] } | null>('system_variant_targets', { p_item_id: itemId });
+  const t = await ctx.sys<Targets>('system_variant_targets', { p_item_id: itemId });
+  if (t?.generating === false) return; // pulled, claimed, or expired meanwhile: nothing to publish
+  // Every canonical path must sit under the item's school: the job's, and the one SQL reports (F-75).
+  const itemSchool = t?.schoolId !== undefined ? idOf(t.schoolId) : null;
+  if (ctx.job.schoolId !== null && itemSchool !== null && itemSchool !== ctx.job.schoolId) refused();
+  const school = ctx.job.schoolId ?? itemSchool;
   for (const ph of t?.photos ?? []) {
-    const canonical = canonicalFor(ph.originalPath, itemId, ph.photoId, ctx.job.schoolId);
+    if (ph.status === 'public_ready') continue;
+    const canonical = canonicalFor(ph.originalPath, itemId, ph.photoId, school);
     const thumbKey = variantKey(canonical, ph.token, 'thumb');
     const mediumKey = variantKey(canonical, ph.token, 'medium');
     const bytes = await ctx.storage.getBytes('originals', canonical.key, MAX_CANONICAL_BYTES);

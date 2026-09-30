@@ -61,9 +61,10 @@ export async function run(p: Payload, ctx: JobCtx): Promise<void> {
     } catch (e) {
       // Provider refused, or retries are exhausted: record an error run so reviewers see
       // `screening_error` and staff posts are not left waiting (§10.4). Otherwise retry the job.
+      // The reason is kept as a boolean key: SQL stores scalar signals only (F-53).
       const code = e instanceof PermanentError || e instanceof RetryableError ? e.code : null;
       if (code !== null && (e instanceof PermanentError || lastAttempt)) {
-        await record(ctx, itemId, ph.photoId, policyVersion, { provider: ctx.vision.provider, model: ctx.vision.model, status: 'error', signals: { error: code } });
+        await record(ctx, itemId, ph.photoId, policyVersion, { provider: ctx.vision.provider, model: ctx.vision.model, status: 'error', signals: { [code]: true } });
         continue;
       }
       throw e;

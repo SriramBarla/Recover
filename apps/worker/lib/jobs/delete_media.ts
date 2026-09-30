@@ -4,8 +4,8 @@
 // the photo row still records for that kind. One bad row refuses the whole ledger (dead job, visible).
 // Deletion is idempotent (404 is success) and verified by HEAD; per-object progress is committed, so a
 // replay resumes, and the ledger closes only when every object verifies absent.
-import { BUCKET_FOR_KIND, assertPhotoObjectKey, isObjectKind, refused, type Bucket, type ObjectKind } from '../keys.ts';
-import type { DeletionObject, PhotoRow } from '../sys-types.ts';
+import { BUCKET_FOR_KIND, assertPhotoObjectKey, idOf, isObjectKind, refused, type Bucket, type ObjectKind } from '../keys.ts';
+import type { DeletionLedger, PhotoRow } from '../sys-types.ts';
 import { RetryableError } from './errors.ts';
 import { bigintField, getPhoto, timeLeftMs } from './support.ts';
 import type { JobCtx, Payload } from './types.ts';
@@ -24,11 +24,14 @@ type Planned = { photoId: string; objectKind: ObjectKind; bucket: Bucket; key: s
 
 export async function run(p: Payload, ctx: JobCtx): Promise<void> {
   const ledgerId = bigintField(p, 'ledgerId');
-  const r = await ctx.sys<{ objects?: DeletionObject[] } | null>('system_deletion_objects', { p_ledger_id: ledgerId });
+  const r = await ctx.sys<DeletionLedger | null>('system_deletion_objects', { p_ledger_id: ledgerId });
+  if (!r || r.found === false) return; // cancelled by a late arrival (G-01)
+  const ledgerSchool = r.schoolId !== undefined ? idOf(r.schoolId) : null;
+  const ledgerItem = r.itemId !== undefined ? idOf(r.itemId) : null;
 
   const photos = new Map<string, PhotoRow>();
   const planned: Planned[] = [];
-  for (const o of r?.objects ?? []) {
+  for (const o of r.objects ?? []) {
     if (o.verifiedAt) continue;
     if (!isObjectKind(o.objectKind)) refused();
     let photo = photos.get(o.photoId);
@@ -39,6 +42,7 @@ export async function run(p: Payload, ctx: JobCtx): Promise<void> {
       photos.set(o.photoId, photo);
     }
     if (ctx.job.schoolId !== null && photo.schoolId !== ctx.job.schoolId) refused();
+    if ((ledgerSchool !== null && photo.schoolId !== ledgerSchool) || (ledgerItem !== null && photo.itemId !== ledgerItem)) refused();
     const bucket = BUCKET_FOR_KIND[o.objectKind];
     if (o.bucket !== bucket) refused();
     const key = assertPhotoObjectKey(o.objectKind, o.storagePath, photo);

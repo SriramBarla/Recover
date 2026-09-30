@@ -17,7 +17,11 @@ export type Signals = {
   contact_info: boolean;
   name_like: boolean;
   severe: boolean;
-  missing?: string[];
+  // Partial results only (§10.4): which feature came back empty. Booleans, because SQL keeps only
+  // boolean and number signals (F-53).
+  missing_safe_search?: boolean;
+  missing_face?: boolean;
+  missing_text?: boolean;
 };
 
 export type ScreenOutcome = { provider: string; model: string; status: 'ok' | 'partial'; signals: Signals };
@@ -275,18 +279,19 @@ async function annotate(jpeg: Buffer, token: string, fetchImpl: FetchLike): Prom
 }
 
 // Partial results are kept (§10.4): with an error set, whatever annotations came back are valid, and
-// the absent ones are listed in `missing`. An error with nothing usable is retried or refused.
+// each absent one is noted as missing_<feature>. An error with nothing usable is retried or refused.
 function outcomeOf(r: AnnotateResponse): { status: 'ok' | 'partial'; signals: Signals } {
   if (!r.error) return { status: 'ok', signals: deriveSignals(r) };
-  const present = {
-    safe_search: r.safeSearchAnnotation !== undefined,
-    face: r.faceAnnotations !== undefined,
-    text: r.fullTextAnnotation !== undefined,
-  };
-  if (!present.safe_search && !present.face && !present.text) {
+  const missingSafeSearch = r.safeSearchAnnotation === undefined;
+  const missingFace = r.faceAnnotations === undefined;
+  const missingText = r.fullTextAnnotation === undefined;
+  if (missingSafeSearch && missingFace && missingText) {
     if (typeof r.error.code === 'number' && RETRY_RPC.has(r.error.code)) throw new RetryableError('provider_unavailable', 30);
     throw new PermanentError('provider_rejected');
   }
-  const missing = Object.entries(present).filter(([, ok]) => !ok).map(([name]) => name);
-  return { status: 'partial', signals: { ...deriveSignals(r), missing } };
+  const signals: Signals = { ...deriveSignals(r) };
+  if (missingSafeSearch) signals.missing_safe_search = true;
+  if (missingFace) signals.missing_face = true;
+  if (missingText) signals.missing_text = true;
+  return { status: 'partial', signals };
 }

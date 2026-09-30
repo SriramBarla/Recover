@@ -2,12 +2,16 @@
 // orphan reconciliation (§9.7), and variant paths (§9.4, F-98).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
 import { PublicError } from '@recover/shared/errors.ts';
 import { PermanentError, RetryableError } from '../../apps/worker/lib/jobs/errors.ts';
 import * as deleteMedia from '../../apps/worker/lib/jobs/delete_media.ts';
 import * as screenItem from '../../apps/worker/lib/jobs/screen_item.ts';
 import * as reconcileOrphans from '../../apps/worker/lib/jobs/reconcile_orphan_uploads.ts';
 import * as makeVariants from '../../apps/worker/lib/jobs/make_variants.ts';
+import * as canonicalizeMapJob from '../../apps/worker/lib/jobs/canonicalize_map.ts';
+import * as deleteMapDraft from '../../apps/worker/lib/jobs/delete_map_draft.ts';
+import * as purge from '../../apps/worker/lib/jobs/purge.ts';
 import { createVision } from '../../apps/worker/lib/media/vision.ts';
 import { canonicalize } from '../../apps/worker/lib/media/canonicalize.ts';
 import { solidJpeg } from '../fuzz/media/corpus.mjs';
@@ -235,11 +239,11 @@ test('screen_item: provider failures retry, and the last attempt records an erro
   assert.deepEqual(early.records, []);
   const last = await screeningWorld({ vision: failing, job: { attempts: 5 } });
   await screenItem.run(payload, last.ctx);
-  assert.deepEqual([last.records[0].p_status, last.records[0].p_signals], ['error', { error: 'provider_unavailable' }]);
+  assert.deepEqual([last.records[0].p_status, last.records[0].p_signals], ['error', { provider_unavailable: true }]);
   const rejected = { ...failing, screen: async () => { throw new PermanentError('provider_rejected'); } };
   const perm = await screeningWorld({ vision: rejected });
   await screenItem.run(payload, perm.ctx);
-  assert.deepEqual(perm.records[0].p_signals, { error: 'provider_rejected' });
+  assert.deepEqual(perm.records[0].p_signals, { provider_rejected: true });
 });
 
 test('screen_item: a canonical path from another school is refused', async () => {
@@ -323,4 +327,111 @@ test('make_variants: variants land under the token path, then publication is att
   target.token = TOKEN;
   target.originalPath = `${SCHOOL}/55555555-5555-4555-8555-555555555555/${PHOTO}/canonical.jpg`;
   await assert.rejects(makeVariants.run({ itemId: ITEM }, ctx), (e) => e instanceof PermanentError && e.code === 'path_refused');
+});
+
+test('make_variants: published generations are never rewritten; a non-generating item is left alone', async () => {
+  const c = await canonicalize(await solidJpeg(800, 600));
+  const other = '66666666-6666-4666-8666-666666666666';
+  const storage = memStorage({
+    [`originals/${BASE}/canonical.jpg`]: { bytes: c.jpeg },
+    [`originals/${SCHOOL}/${ITEM}/${other}/canonical.jpg`]: { bytes: c.jpeg },
+  });
+  let targets = {
+    generating: true,
+    schoolId: SCHOOL,
+    photos: [
+      { photoId: PHOTO, originalPath: `${BASE}/canonical.jpg`, token: TOKEN, status: 'public_ready' },
+      { photoId: other, originalPath: `${SCHOOL}/${ITEM}/${other}/canonical.jpg`, token: 'cd'.repeat(16), status: 'canonical_ready' },
+    ],
+  };
+  const ready = [];
+  let finalized = 0;
+  const { ctx } = ctxWith(
+    {
+      system_variant_targets: () => targets,
+      system_photo_variants_ready: (a) => ready.push(a.p_photo_id),
+      system_finalize_publish: () => ({ published: ++finalized > 0 }),
+    },
+    storage,
+  );
+  await makeVariants.run({ itemId: ITEM }, ctx);
+  assert.deepEqual(ready, [other]);
+  assert.deepEqual(storage.ops.filter(([op]) => op === 'put').map(([, k]) => k.split('/').at(-1)), ['thumb.jpg', 'medium.jpg']);
+  assert.ok(storage.ops.every(([, k]) => !k.includes(TOKEN)), 'the published token path was not touched');
+
+  targets = { ...targets, schoolId: OTHER_SCHOOL };
+  await assert.rejects(makeVariants.run({ itemId: ITEM }, ctx), (e) => e instanceof PermanentError && e.code === 'path_refused');
+  targets = { generating: false, photos: [] };
+  const before = finalized;
+  await makeVariants.run({ itemId: ITEM }, ctx);
+  assert.equal(finalized, before, 'nothing to publish');
+});
+
+test('delete_media: a cancelled ledger is a no-op; a ledger naming another item is refused', async () => {
+  const cancelled = deletionWorld(ledgerRows());
+  cancelled.ctx.sys = async (name) => (name === 'system_deletion_objects' ? { found: false, objects: [] } : assert.fail(name));
+  await deleteMedia.run({ ledgerId: 5 }, cancelled.ctx);
+  assert.deepEqual(cancelled.storage.ops, []);
+
+  const w = deletionWorld(ledgerRows());
+  const inner = w.ctx.sys;
+  w.ctx.sys = async (name, args) => {
+    const r = await inner(name, args);
+    return name === 'system_deletion_objects' ? { found: true, schoolId: SCHOOL, itemId: '77777777-7777-4777-8777-777777777777', objects: r.objects } : r;
+  };
+  await assert.rejects(deleteMedia.run({ ledgerId: 5 }, w.ctx), (e) => e instanceof PermanentError && e.code === 'path_refused');
+  assert.deepEqual(w.storage.ops.filter(([op]) => op === 'del'), []);
+});
+
+const MAP = '88888888-8888-4888-8888-888888888888';
+const mapRow = (over = {}) => ({ mapVersionId: MAP, schoolId: SCHOOL, approvalStatus: 'draft', draftPath: `${SCHOOL}/${MAP}/draft`, draftCanonicalPath: null, publicPath: null, ...over });
+
+test('canonicalize_map: draft PNG becomes a canonical JPEG with dimensions; missing drafts retry; frozen versions are skipped', async () => {
+  const png = await sharp({ create: { width: 3000, height: 1500, channels: 3, background: '#ffffff' } }).png().toBuffer();
+  const storage = memStorage({ [`map_drafts/${SCHOOL}/${MAP}/draft`]: { bytes: png } });
+  let row = mapRow();
+  const ready = [];
+  const { ctx } = ctxWith({ system_map_get: () => row, system_map_canonical_ready: (a) => ready.push(a) }, storage);
+  await canonicalizeMapJob.run({ mapVersionId: MAP }, ctx);
+  assert.deepEqual(ready, [{ p_map_version_id: MAP, p_canonical_path: `${SCHOOL}/${MAP}/canonical.jpg`, p_width: 2400, p_height: 1200 }]);
+  assert.ok(storage.objects.has(`map_drafts/${SCHOOL}/${MAP}/canonical.jpg`));
+
+  storage.objects.delete(`map_drafts/${SCHOOL}/${MAP}/draft`);
+  await assert.rejects(canonicalizeMapJob.run({ mapVersionId: MAP }, ctx), (e) => e instanceof RetryableError && e.code === 'draft_missing');
+  row = mapRow({ approvalStatus: 'pending_district', draftCanonicalPath: `${SCHOOL}/${MAP}/canonical.jpg` });
+  await canonicalizeMapJob.run({ mapVersionId: MAP }, ctx);
+  assert.equal(ready.length, 1, 'no work once the version left draft');
+  row = mapRow({ draftPath: `${OTHER_SCHOOL}/${MAP}/draft` });
+  await assert.rejects(canonicalizeMapJob.run({ mapVersionId: MAP }, ctx), (e) => e instanceof PermanentError && e.code === 'path_refused');
+});
+
+test('delete_map_draft: removes both private objects after activation or rejection, never during review', async () => {
+  const objects = () => ({ [`map_drafts/${SCHOOL}/${MAP}/draft`]: {}, [`map_drafts/${SCHOOL}/${MAP}/canonical.jpg`]: {}, [`maps/${SCHOOL}/${MAP}/${TOKEN}.jpg`]: {} });
+  for (const status of ['draft', 'pending_district']) {
+    const storage = memStorage(objects());
+    const { ctx, calls } = ctxWith({ system_map_get: () => mapRow({ approvalStatus: status }) }, storage);
+    await deleteMapDraft.run({ mapVersionId: MAP }, ctx);
+    assert.equal(storage.objects.size, 3, status);
+    assert.deepEqual(calls.map((c) => c.name), ['system_map_get']);
+  }
+  for (const status of ['approved', 'rejected']) {
+    const storage = memStorage(objects());
+    let cleared = 0;
+    const row = mapRow({ approvalStatus: status, draftCanonicalPath: `${SCHOOL}/${MAP}/canonical.jpg` });
+    const { ctx } = ctxWith({ system_map_get: () => row, system_map_draft_deleted: () => ++cleared }, storage);
+    await deleteMapDraft.run({ mapVersionId: MAP }, ctx);
+    assert.deepEqual([...storage.objects.keys()], [`maps/${SCHOOL}/${MAP}/${TOKEN}.jpg`], `${status}: only the public copy remains`);
+    assert.equal(cleared, 1);
+  }
+});
+
+test('purge: any kind-shaped value goes to SQL, which owns the list; anything else is refused', async () => {
+  const kinds = [];
+  const { ctx } = ctxWith({ system_purge: (a) => { kinds.push(a.p_kind); return { count: 0 }; } }, memStorage());
+  await purge.run({ kind: 'map_drafts' }, ctx);
+  await purge.run({ kind: 'media_tickets' }, ctx);
+  assert.deepEqual(kinds, ['map_drafts', 'media_tickets']);
+  for (const bad of [undefined, '', 'Jobs; drop', 'x'.repeat(41), 7]) {
+    await assert.rejects(purge.run({ kind: bad }, ctx), (e) => e instanceof PermanentError && e.code === 'invalid_payload');
+  }
 });

@@ -1,13 +1,14 @@
-// GET /api/media/ticket/[ticketId]?op=media.read|map.read[&full=1] (§9.4, §9.5; G-04, G-28;
+// GET /api/media/ticket/[ticketId]?op=media.read|map.read[&full=1] (§9.4, §9.5; G-04, G-07, G-28;
 // BUILD-CONTRACT.md section 9.3). Web (OIDC) only. The web minted the single-use ticket through
 // api_staff_media_ticket after verifying the staff assertion; SQL consumes it here. Photos stream the
-// private review rendition, or the canonical original with full=1; map tickets stream the private
-// canonical map. Never raw uploads, never cacheable.
+// private review rendition, or the canonical original with full=1. Maps stream the private canonical
+// draft while one exists, otherwise the version's copy in `maps` (activated and retired versions).
+// Never raw uploads, never cacheable.
 import { PublicError } from '@recover/shared/errors.ts';
 import { requireWeb } from '@/lib/auth.ts';
 import { sys } from '@/lib/db.ts';
 import { failure, requestIdFor, requireUuid } from '@/lib/http.ts';
-import { assertKey, canonicalKey, idOf, mapCanonicalKey, reviewKey, type Bucket } from '@/lib/keys.ts';
+import { assertKey, canonicalKey, idOf, isHex32, mapCanonicalKey, refused, reviewKey, type Bucket } from '@/lib/keys.ts';
 import { storage } from '@/lib/runtime.ts';
 import type { TicketContext } from '@/lib/sys-types.ts';
 
@@ -15,15 +16,25 @@ export const runtime = 'nodejs';
 
 const OPS = new Set(['media.read', 'map.read']);
 
-// The photo's item id is not in the ticket; recover it from the recorded path, then require the path to
-// be exactly the key that school/item/photo imply.
+// The recorded path must be exactly the key the ticket's school/item/photo imply.
 function photoKey(t: TicketContext, schoolId: string, full: boolean): string {
   const photoId = idOf(t.photoId);
   const recorded = full ? t.originalPath : (t.reviewPath ?? t.originalPath);
-  if (typeof recorded !== 'string') throw new PublicError('not_found');
-  const itemId = recorded.split('/')[1] ?? '';
-  const ids = { schoolId, itemId, photoId };
+  if (typeof recorded !== 'string') throw new PublicError('not_found'); // not canonical yet
+  const ids = { schoolId, itemId: idOf(t.itemId ?? recorded.split('/')[1]), photoId };
   return assertKey(recorded, recorded.endsWith('/review.jpg') ? reviewKey(ids) : canonicalKey(ids));
+}
+
+function mapObject(t: TicketContext, schoolId: string): [Bucket, string] {
+  const mapVersionId = idOf(t.mapVersionId);
+  if (t.draftCanonicalPath) return ['map_drafts', assertKey(t.draftCanonicalPath, mapCanonicalKey(schoolId, mapVersionId))];
+  if (t.publicPath) {
+    const prefix = `${schoolId}/${mapVersionId}/`;
+    const leaf = t.publicPath.startsWith(prefix) ? t.publicPath.slice(prefix.length) : '';
+    if (!leaf.endsWith('.jpg') || !isHex32(leaf.slice(0, -4))) refused();
+    return ['maps', t.publicPath];
+  }
+  throw new PublicError('not_found'); // no canonical map yet
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ ticketId: string }> }): Promise<Response> {
@@ -42,16 +53,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ ticketId
     if (!t) throw new PublicError('not_found');
     if (t.operation !== op) throw new PublicError('forbidden');
     const schoolId = idOf(t.schoolId);
-    let bucket: Bucket;
-    let key: string;
-    if (op === 'media.read') {
-      bucket = 'originals';
-      key = photoKey(t, schoolId, full);
-    } else {
-      if (t.draftCanonicalPath === null) throw new PublicError('not_found'); // not canonical yet
-      bucket = 'map_drafts';
-      key = assertKey(t.draftCanonicalPath, mapCanonicalKey(schoolId, idOf(t.mapVersionId)));
-    }
+    const [bucket, key] = op === 'media.read' ? (['originals', photoKey(t, schoolId, full)] as const) : mapObject(t, schoolId);
 
     const res = await storage().get(bucket, key);
     if (!res) throw new PublicError('not_found');

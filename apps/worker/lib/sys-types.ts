@@ -25,36 +25,42 @@ export type CompleteSpecRow = { photos: { photoId: string; key: string }[] };
 export type TicketContext = {
   schoolId: string;
   operation: string;
+  itemId?: string | null;
   photoId: string | null;
   reviewPath: string | null;
   originalPath: string | null;
   mapVersionId: string | null;
   draftPath: string | null;
   draftCanonicalPath: string | null;
+  publicPath?: string | null;
 };
 
 export type DeletionObject = {
   photoId: string;
   objectKind: string;
   bucket: string;
-  storagePath: string;
+  storagePath: string | null; // NULLed by the deletion_evidence purge 90 days after verification
   deletedAt: string | null;
   verifiedAt: string | null;
 };
 
-export type VariantTarget = { photoId: string; originalPath: string; token: string };
+// `found: false` means the ledger was cancelled (a late arrival, G-01): nothing to delete.
+export type DeletionLedger = { found?: boolean; schoolId?: string; itemId?: string; objects?: DeletionObject[] };
+
+export type VariantTarget = { photoId: string; originalPath: string; token: string; status?: PhotoStatus };
 
 // Requested: system_screening_targets(p_item_id, p_policy_version) -> current canonical photos of the
 // item that have no screening run for that policy yet.
 export type ScreeningTarget = { photoId: string; originalPath: string };
 
-// Requested shape for system_map_get(p_map_version_id); the contract names the function only.
+// system_map_get(p_map_version_id); the contract names the function only.
 export type MapRow = {
   mapVersionId: string;
   schoolId: string;
   approvalStatus: string;
   draftPath: string | null;
   draftCanonicalPath: string | null;
+  publicPath?: string | null;
 };
 
 export type DraftToPurge = { itemId: string; schoolId: string; incomingPaths: string[] };
