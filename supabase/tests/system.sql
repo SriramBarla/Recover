@@ -299,6 +299,15 @@ begin
                                     and j.payload = jsonb_build_object('itemId', it, 'policyVersion', 'v1')),
                          'screen_item enqueued with {itemId, policyVersion} and its dedupe key');
 
+  -- screen_item work list: canonical current photos without a run for the policy version
+  r := pg_temp.w(format($q$select public.system_screening_targets(%L, 'v1')$q$, it));
+  perform pg_temp.expect(r = jsonb_build_object('photos', jsonb_build_array(
+                               jsonb_build_object('photoId', p0, 'originalPath', pre0 || 'canonical.jpg'),
+                               jsonb_build_object('photoId', p1, 'originalPath', pre1 || 'canonical.jpg'))),
+                         'screening targets list both canonical photos in position order');
+  perform pg_temp.expect(pg_temp.err(format('select public.system_screening_targets(%L, null)', it)) = 'RV001:invalid_input',
+                         'screening targets need a policy version');
+
   -- budget, then screening with derived signals only (F-53)
   r := pg_temp.w('select public.system_screening_budget_take(2)');
   perform pg_temp.expect(r = '{"allowed": true, "enabled": true}'::jsonb, 'budget take allowed');
@@ -312,6 +321,11 @@ begin
                          'screening_runs.signals keeps booleans and numbers only');
   perform pg_temp.expect((select screening_flags->'has_text' from public.items where id = it) = 'true'::jsonb,
                          'has_text merged into screening_flags');
+  r := pg_temp.w(format($q$select public.system_screening_targets(%L, 'v1')$q$, it));
+  perform pg_temp.expect(jsonb_array_length(r->'photos') = 1 and (r->'photos'->0->>'photoId')::uuid = p1,
+                         'screening targets skip photos already screened for the policy (replay)');
+  r := pg_temp.w(format($q$select public.system_screening_targets(%L, 'v2')$q$, it));
+  perform pg_temp.expect(jsonb_array_length(r->'photos') = 2, 'screening targets are per policy version');
   r := pg_temp.w(format($q$select public.system_record_screening(%L, %L, 'mock', 'mock-1', 'v1', 'ok', '{"nsfw": true}')$q$, it, p0));
   perform pg_temp.expect(not (r->>'recorded')::boolean and (select count(*) from public.screening_runs where item_photo_id = p0) = 1
                          and (select screening_flags ? 'nsfw' from public.items where id = it) is false,
@@ -321,6 +335,10 @@ begin
                          and (select screening_status from public.items where id = it) = 'flagged',
                          'fully screened item with a flag is flagged');
   perform pg_temp.expect(pg_temp.stat(fchs, 'screening_images') = v_before + 2, 'screening_images counts each run');
+  r := pg_temp.w(format($q$select public.system_screening_targets(%L, 'v1')$q$, it));
+  perform pg_temp.expect(r = '{"photos": []}'::jsonb, 'no screening targets once every photo has a run');
+  r := pg_temp.w(format($q$select public.system_screening_targets(%L, 'v1')$q$, gen_random_uuid()));
+  perform pg_temp.expect(r = '{"photos": []}'::jsonb, 'unknown item has no screening targets');
   perform pg_temp.expect(pg_temp.err(format($q$select public.system_record_screening(%L, %L, 'mock', 'm', 'v1', 'maybe', '{}')$q$, it, p1))
                          = 'RV001:invalid_input', 'screening status is validated');
 

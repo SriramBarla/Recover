@@ -622,6 +622,27 @@ begin
   return jsonb_build_object('allowed', v_count is not null, 'enabled', true);
 end $$;
 
+-- screen_item work list: current canonical generations without a run for this policy version (G-26), so a
+-- replayed job only screens what is missing. Canonical bytes only (F-73): original_path, never incoming_path.
+create or replace function public.system_screening_targets(p_item_id uuid, p_policy_version text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_photos jsonb;
+begin
+  if p_policy_version is null or p_policy_version !~ '^[A-Za-z0-9._-]{1,20}$' then
+    perform private.fail('invalid_input', 'policy_version');
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('photoId', p.id, 'originalPath', p.original_path) order by p.position),
+                  '[]'::jsonb)
+    into v_photos
+    from public.item_photos p
+   where p.item_id = p_item_id and p.is_current and p.status in ('canonical_ready', 'public_ready')
+     and p.original_path is not null
+     and not exists (select 1 from public.screening_runs r
+                      where r.item_photo_id = p.id and r.policy_version = p_policy_version);
+  return jsonb_build_object('photos', v_photos);
+end $$;
+
 create or replace function public.system_record_screening(
   p_item_id uuid, p_photo_id uuid, p_provider text, p_model text, p_policy_version text, p_status text, p_signals jsonb
 ) returns jsonb
