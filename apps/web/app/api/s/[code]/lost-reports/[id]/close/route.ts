@@ -12,7 +12,7 @@ export const POST = handle<{ code: string; id: string }>(
   async (req, { code, id }, reply) => {
     assertSameOrigin(req);
     const meta = await getMeta(code);
-    const device = getDevice(req, meta.school.id, { create: false });
+    const device = await getDevice(req, meta.school, { create: false });
     if (!device) throw new PublicError('not_found');
     const reportId = uuidParam(id);
     const b = await readJsonObject(req);

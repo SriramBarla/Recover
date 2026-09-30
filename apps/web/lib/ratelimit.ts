@@ -15,9 +15,10 @@ export function ipHmac(headers: HeaderReader): Buffer {
 }
 
 // Raises PublicError('rate_limited', retrySeconds) from SQL when a counter is exhausted. A request with no
-// device cookie (a first search) is limited by IP only.
+// device cookie (a first search) is limited by IP only. schoolCode is null only for the school-less
+// client_error action (one district-wide budget per address); SQL refuses any other pairing.
 export async function take(
-  schoolCode: string,
+  schoolCode: string | null,
   action: RateAction,
   digest: Buffer | null,
   req: { headers: HeaderReader },

@@ -1,6 +1,8 @@
 // Staff identity (§14.1): Auth.js v5, Google only in production, JWT sessions, no adapter.
-// The session cookie carries only {sub, authTime, lastSeen}. Memberships are never cached in it;
-// they are resolved per request through api_staff_resolve_session (lib/staff.ts).
+// The session cookie carries only {sub, authTime, signedInAt, lastSeen}: authTime is when the user
+// last authenticated at Google (step-up, G-31), signedInAt when this session was issued (the 24 h
+// window). Memberships are never cached in it; they are resolved per request through
+// api_staff_resolve_session (lib/staff.ts).
 // Sign-in binds the Google subject to an invited staff row via api_staff_bind_identity, which is
 // assertion-gated (G-05). Nothing here logs sessions, subjects, or emails.
 import NextAuth, { type NextAuthConfig, type Session } from 'next-auth';
@@ -8,7 +10,7 @@ import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { api } from './lib/db.ts';
 import { devLoginEnabled, requireEnv } from './lib/env.ts';
-import { SESSION_IDLE_S, domainAllowed, emailDomain, liveSession, prepareCall } from './lib/ops.ts';
+import { SESSION_IDLE_S, authTimeFrom, domainAllowed, emailDomain, liveSession, prepareCall } from './lib/ops.ts';
 
 const DEV_PROVIDER = 'dev-login';
 
@@ -68,7 +70,8 @@ if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
       // hd is added per request by the sign-in page from api_get_staff_domains (first domain),
-      // because the allowlist lives in the database, not in the build.
+      // because the allowlist lives in the database, not in the build. A step-up sign-in replaces
+      // this prompt with prompt=login and max_age=0 (googleAuthParams in lib/ops.ts).
       authorization: { params: { prompt: 'select_account' } },
     }),
   );
@@ -136,16 +139,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
     },
 
-    async jwt({ token, account, trigger }) {
+    async jwt({ token, account, profile, trigger }) {
       const nowS = Math.floor(Date.now() / 1000);
       if ((trigger === 'signIn' || trigger === 'signUp') && account) {
         const sub = account.providerAccountId;
         if (!sub) return null;
-        return { sub, authTime: nowS, lastSeen: nowS };
+        // Step-up freshness (G-31) must reflect a real Google authentication, not this callback:
+        // Google sessions use the ID token's auth_time ([VERIFY] V-6 fallback in authTimeFrom); the
+        // dev Credentials login keeps the server clock.
+        const authTime = account.provider === 'google' ? authTimeFrom(profile?.auth_time, nowS) : nowS;
+        return { sub, authTime, signedInAt: nowS, lastSeen: nowS };
       }
       const live = liveSession(token, nowS);
       if (!live) return null; // past 24 h absolute or 8 h idle: force a fresh sign-in
-      return { sub: live.sub, authTime: live.authTime, lastSeen: nowS };
+      return { sub: live.sub, authTime: live.authTime, signedInAt: live.signedInAt, lastSeen: nowS };
     },
 
     async session({ session, token }) {

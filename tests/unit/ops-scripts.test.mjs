@@ -10,10 +10,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { rowViolations } from '../../scripts/audit-privacy-sample.mjs';
 import { addDays, horizon, parseCalendarCsv, validDate } from '../../scripts/calendar-horizon.mjs';
-import { jobId, replayDedupeKey } from '../../scripts/jobs.mjs';
+import { auditCode, jobId, replayDedupeKey } from '../../scripts/jobs.mjs';
 import { mergeNormalized, validateSynonyms } from '../../scripts/load-synonyms.mjs';
-import { buildIndex, classify, displayKey, localSignRequest, missingObjects, parseListObjects, s3Config } from '../../scripts/reconcile-orphans.mjs';
-import { jobsToReopen, parseDirectory } from '../../scripts/restore-quarantine.mjs';
+import {
+  BUCKETS, buildIndex, classify, deleteOrphans, displayKey, localSignRequest, missingObjects, modifiedSince, parseListObjects,
+  s3Config, sameObject,
+} from '../../scripts/reconcile-orphans.mjs';
+import { jobsToReopen, parseDirectory, recordedSinceReopen, setCronActive } from '../../scripts/restore-quarantine.mjs';
 import { planNext } from '../../scripts/rotate-assertion-key.mjs';
 import { ROLES, newPassword, scramVerifier } from '../../scripts/rotate-db-password.mjs';
 
@@ -150,8 +153,8 @@ test('ListObjectsV2 responses are parsed with entities and continuation tokens',
     + '<NextContinuationToken>t&amp;k==</NextContinuationToken></ListBucketResult>';
   assert.deepEqual(parseListObjects(xml), {
     objects: [
-      { key: 'a/b&c/raw', size: 123, lastModified: '2026-09-01T00:00:00.000Z' },
-      { key: 'x/y', size: 0, lastModified: '2026-09-02T00:00:00.000Z' },
+      { key: 'a/b&c/raw', size: 123, lastModified: '2026-09-01T00:00:00.000Z', etag: '"e"' },
+      { key: 'x/y', size: 0, lastModified: '2026-09-02T00:00:00.000Z', etag: null },
     ],
     truncated: true,
     next: 't&k==',
@@ -181,7 +184,9 @@ test('orphan classification covers every class, and missing objects are found', 
   assert.equal(c('incoming', `${S}/${I}/${Q}/raw`, '2026-09-30T11:00:00Z'), 'too_new');
   assert.equal(c('incoming', `${S}/${I}/${Q}/raw`, 'garbage'), 'too_new');
   const listed = new Set([`${S}/${I}/${P}/t0k3n/thumb.jpg`]);
-  assert.deepEqual(missingObjects('variants', listed, index), [{ bucket: 'variants', photoId: P, column: 'medium_path', status: 'public_ready' }]);
+  assert.deepEqual(missingObjects('variants', listed, index), [
+    { bucket: 'variants', table: 'item_photos', id: P, column: 'medium_path', status: 'public_ready', rowTime: null },
+  ]);
   const deleting = buildIndex(
     [{ id: P, item_id: I, school_id: S, status: 'public_ready', original_path: `${S}/${I}/${P}/canonical.jpg` }],
     [{ object_kind: 'original', storage_path: `${S}/${I}/${P}/canonical.jpg` }],
@@ -231,4 +236,156 @@ test('synonyms: the file shape is validated and normalized terms are merged', ()
   const self = mergeNormalized([{ term: 'Crocs', expansions: ['crocs'] }], new Map([['Crocs', 'crocs'], ['crocs', 'crocs']]));
   assert.equal(self.merged.size, 0);
   assert.ok(self.notes[0].includes('no expansion left'));
+});
+
+// ---------- review fixes: storage (items 1-3) ----------
+
+const RS = '0a0a0a0a-0000-4000-8000-000000000001';
+const RI = '0a0a0a0a-3000-4000-8000-000000000001';
+const RP = '0a0a0a0a-4000-4000-8000-000000000001';
+
+test('reconcile covers map drafts and public maps: classes, missing objects, masked tokens', () => {
+  const V = '0a0a0a0a-2000-4000-8000-000000000001';
+  const W = '0a0a0a0a-2000-4000-8000-000000000009';
+  assert.deepEqual(Object.keys(BUCKETS), ['incoming', 'originals', 'variants', 'map_drafts', 'maps']);
+  const index = buildIndex([], [], [{
+    id: V, school_id: RS, approval_status: 'approved', approved_at: '2026-09-01T00:00:00Z',
+    draft_storage_path: `${RS}/${V}/draft`, draft_canonical_path: null, public_storage_path: `${RS}/${V}/abc123.jpg`,
+  }]);
+  const opts = { now: Date.parse('2026-09-30T12:00:00Z'), minAgeMs: 24 * 3600e3 };
+  const c = (bucket, key) => classify(bucket, { key, lastModified: '2026-09-01T00:00:00Z' }, index, opts);
+  assert.equal(c('maps', `${RS}/${V}/abc123.jpg`), 'referenced');
+  assert.equal(c('map_drafts', `${RS}/${V}/draft`), 'referenced');
+  assert.equal(c('map_drafts', `${RS}/${V}/canonical.jpg`), 'unreferenced');
+  assert.equal(c('maps', `${RS}/${V}/old999.jpg`), 'unreferenced');
+  assert.equal(c('maps', `${RS}/${W}/x.jpg`), 'no_row');
+  assert.equal(c('maps', `0b0b0b0b-0000-4000-8000-000000000002/${V}/x.jpg`), 'no_row'); // the version belongs to another school
+  assert.equal(c('maps', 'logo.png'), 'unrecognized');
+  assert.deepEqual(missingObjects('maps', new Set(), index), [
+    { bucket: 'maps', table: 'map_versions', id: V, column: 'public_storage_path', status: 'approved', rowTime: '2026-09-01T00:00:00.000Z' },
+  ]);
+  assert.equal(displayKey('maps', `${RS}/${V}/abc123.jpg`, false), `${RS}/${V}/<token>.jpg`);
+  assert.equal(displayKey('maps', `${RS}/${V}/abc123.jpg`, true), `${RS}/${V}/abc123.jpg`);
+  assert.equal(displayKey('map_drafts', `${RS}/${V}/draft`, false), `${RS}/${V}/draft`);
+});
+
+test('--since lists every object modified in the window and flags overwritten live objects', () => {
+  const index = buildIndex([{
+    id: RP, item_id: RI, school_id: RS, status: 'public_ready', updated_at: '2026-09-20T10:00:00Z',
+    thumb_path: `${RS}/${RI}/${RP}/t/thumb.jpg`, medium_path: `${RS}/${RI}/${RP}/t/medium.jpg`,
+  }], []);
+  const objects = [
+    { key: `${RS}/${RI}/${RP}/t/thumb.jpg`, lastModified: '2026-09-20T10:00:05Z' }, // written with its row
+    { key: `${RS}/${RI}/${RP}/t/medium.jpg`, lastModified: '2026-09-25T03:00:00Z' }, // overwritten days later
+    { key: `${RS}/${RI}/${RP}/x/thumb.jpg`, lastModified: '2026-09-26T00:00:00Z' }, // unreferenced, written in the window
+    { key: 'stray.bin', lastModified: 'not a date' },
+    { key: `${RS}/${RI}/${RP}/t/old.jpg`, lastModified: '2026-09-01T00:00:00Z' }, // before the window: not listed
+  ];
+  const got = modifiedSince('variants', objects, index, Date.parse('2026-09-15T00:00:00Z'), { now: Date.parse('2026-09-30T00:00:00Z'), minAgeMs: 3600e3 });
+  assert.deepEqual(got.map((r) => [r.class, r.note]), [
+    ['referenced', ''], ['referenced', 'written after its row'], ['unreferenced', ''], ['unrecognized', 'no timestamp'],
+  ]);
+  assert.equal(got[1].row_time, '2026-09-20T10:00:00.000Z');
+});
+
+test('an object is re-confirmed by ETag, or else by the Last-Modified second and the size', () => {
+  assert.equal(sameObject({ etag: '"abc"' }, { etag: '"abc"' }), true);
+  assert.equal(sameObject({ etag: '"abc"' }, { etag: 'W/"abc"' }), true);
+  assert.equal(sameObject({ etag: '"abc"' }, { etag: '"abd"' }), false);
+  const listed = { etag: null, lastModified: '2026-09-30T09:10:54.508Z', size: 10 };
+  assert.equal(sameObject(listed, { 'last-modified': 'Wed, 30 Sep 2026 09:10:54 GMT', 'content-length': '10' }), true);
+  assert.equal(sameObject(listed, { 'last-modified': 'Wed, 30 Sep 2026 09:10:55 GMT', 'content-length': '10' }), false);
+  assert.equal(sameObject(listed, { 'last-modified': 'Wed, 30 Sep 2026 09:10:54 GMT', 'content-length': '11' }), false);
+  assert.equal(sameObject({ etag: null, lastModified: null, size: 1 }, {}), false);
+});
+
+test('every DELETE follows a fresh lookup and a matching HEAD; counts survive partial runs', async () => {
+  const opts = { now: Date.parse('2026-09-30T12:00:00Z'), minAgeMs: 24 * 3600e3 };
+  const key = (n) => `${RS}/${RI}/0a0a0a0a-4000-4000-8000-00000000000${n}/raw`;
+  const batch = [1, 2, 3, 4, 5, 6].map((n) => ({ bucket: 'incoming', key: key(n), lastModified: '2026-09-01T00:00:00Z', etag: `"e${n}"`, size: 1 }));
+  batch.push({ bucket: 'incoming', key: key(7), lastModified: '2026-09-30T11:30:00Z', etag: '"e7"', size: 1 }); // its listed age is kept
+  const empty = buildIndex([], [], []);
+  const nowReferenced = buildIndex([{ id: '0a0a0a0a-4000-4000-8000-000000000002', item_id: RI, school_id: RS, status: 'uploaded', incoming_path: key(2) }], []);
+  const heads = { 1: '"e1"', 2: '"e2"', 3: 404, 4: '"changed"', 5: 500, 6: '"e6"' };
+  const calls = [];
+  const send = async ({ method, key: k }) => {
+    const n = Number(k.split('/')[2].slice(-1));
+    calls.push(`${method} ${n}`);
+    if (method === 'HEAD') {
+      const h = heads[n];
+      return typeof h === 'number' ? { status: h, ok: false, headers: {}, text: '' } : { status: 200, ok: true, headers: { etag: h }, text: '' };
+    }
+    return n === 6 ? { status: 500, ok: false, headers: {}, text: '<Error><Code>InternalError</Code></Error>' } : { status: 204, ok: true, headers: {}, text: '' };
+  };
+  const zero = () => ({ deleted: 0, failed: 0, skipped_not_orphan: 0, skipped_changed: 0, skipped_gone: 0 });
+  const lookups = [];
+  const counts = zero();
+  await deleteOrphans({ batch, lookup: async (b, k) => (lookups.push(k), k === key(2) ? nowReferenced : empty), send, opts, say: () => {}, counts });
+  assert.deepEqual(counts, { deleted: 1, failed: 2, skipped_not_orphan: 2, skipped_changed: 1, skipped_gone: 1 });
+  assert.equal(lookups.length, 7, 'every key is looked up again');
+  assert.deepEqual(calls, ['HEAD 1', 'DELETE 1', 'HEAD 3', 'HEAD 4', 'HEAD 5', 'HEAD 6', 'DELETE 6']);
+
+  let n = 0;
+  const partial = zero();
+  await assert.rejects(
+    deleteOrphans({ batch, lookup: async () => { n += 1; if (n === 3) throw new Error('connection lost'); return empty; }, send, opts, say: () => {}, counts: partial }),
+    /connection lost/,
+  );
+  assert.deepEqual(partial, { ...zero(), deleted: 2 }, 'the counts of a run that failed midway are kept for its audit row');
+
+  const stopped = zero();
+  await deleteOrphans({ batch, lookup: async () => empty, send, opts, say: () => {}, counts: stopped, shouldStop: () => stopped.deleted >= 1 });
+  assert.deepEqual(stopped, { ...zero(), deleted: 1 });
+});
+
+// ---------- review fixes: restore quarantine (items 5, 11) and job errors (item 10) ----------
+
+test('reopen restores every job disabled by any --begin since the last reopen', () => {
+  const rows = [
+    { id: 1, metadata: { phase: 'begin', cron_job_ids: [9], cron_job_names: ['old_job'] } },
+    { id: 2, metadata: { phase: 'reopen' } },
+    { id: 3, metadata: { phase: 'begin', cron_job_ids: [1, 2], cron_job_names: ['recover_drain', 'recover_health'] } },
+    { id: 4, metadata: { phase: 'begin', cron_job_ids: [], cron_job_names: [] } }, // a second --begin finds nothing active
+  ];
+  const recorded = recordedSinceReopen(rows);
+  assert.deepEqual(recorded, { ids: [1, 2], names: ['recover_drain', 'recover_health'], begins: 2 });
+  const cron = [
+    { jobid: 1, jobname: 'recover_drain', active: false },
+    { jobid: 2, jobname: 'recover_health', active: false },
+    { jobid: 9, jobname: 'old_job', active: false },
+  ];
+  assert.deepEqual(jobsToReopen(cron, recorded), [1, 2], 'the empty second --begin does not strand recover_drain');
+  assert.deepEqual(jobsToReopen(cron, recordedSinceReopen([rows[3]])), [], 'reading only the latest record would re-enable nothing');
+  assert.equal(recordedSinceReopen(rows.slice(0, 2)), null);
+  assert.equal(recordedSinceReopen([]), null);
+});
+
+test('the cron fallback update must change exactly one row', async () => {
+  const tx = (alterError, rows) => {
+    const f = async () => rows;
+    f.savepoint = async () => {
+      if (alterError) throw new Error(alterError);
+    };
+    return f;
+  };
+  assert.equal(await setCronActive(tx(null, []), 1, false), 'alter_job');
+  assert.equal(await setCronActive(tx('must be owner of job 1', [{ jobid: 1 }]), 1, false), 'update');
+  await assert.rejects(setCronActive(tx('must be owner of job 1', []), 1, false), /changed 0 rows, not 1/);
+  await assert.rejects(setCronActive(tx('must be owner of job 1', [{ jobid: 1 }, { jobid: 1 }]), 1, false), /changed 2 rows, not 1/);
+  const broken = async () => {
+    throw new Error('permission denied for table job');
+  };
+  broken.savepoint = async () => {
+    throw new Error('must be owner of job 7');
+  };
+  await assert.rejects(setCronActive(broken, 7, true), /alter_job failed \(must be owner of job 7\) and the fallback update failed \(permission denied/);
+});
+
+test('audit metadata keeps plain error codes only', () => {
+  assert.equal(auditCode('provider_timeout'), 'provider_timeout');
+  assert.equal(auditCode(null), null);
+  assert.equal(auditCode(undefined), null);
+  for (const bad of ['Error: connect ECONNREFUSED 10.0.0.7:443', 'Timeout', 'x@y.org', 'a b', '5xx', `k${'x'.repeat(60)}`]) {
+    assert.equal(auditCode(bad), 'other', bad);
+  }
 });

@@ -5,8 +5,10 @@ import assert from 'node:assert/strict';
 import {
   SESSION_ABSOLUTE_S,
   SESSION_IDLE_S,
+  authTimeFrom,
   domainAllowed,
   emailDomain,
+  googleAuthParams,
   isFresh,
   liveSession,
   safeReturnPath,
@@ -15,7 +17,40 @@ import {
 const NOW = 1_790_000_000;
 
 test('a fresh token is live', () => {
-  assert.deepEqual(liveSession({ sub: 'abc', authTime: NOW - 60, lastSeen: NOW - 30 }, NOW), { sub: 'abc', authTime: NOW - 60 });
+  assert.deepEqual(liveSession({ sub: 'abc', authTime: NOW - 60, signedInAt: NOW - 50, lastSeen: NOW - 30 }, NOW), {
+    sub: 'abc',
+    authTime: NOW - 60,
+    signedInAt: NOW - 50,
+  });
+  // tokens issued before signedInAt existed: authTime was the issue time
+  assert.deepEqual(liveSession({ sub: 'abc', authTime: NOW - 60, lastSeen: NOW - 30 }, NOW), { sub: 'abc', authTime: NOW - 60, signedInAt: NOW - 60 });
+});
+
+test('the absolute window runs from signedInAt, so an old Google authentication is live but not fresh (G-31)', () => {
+  const t = { sub: 'a', authTime: NOW - 30 * 86_400, signedInAt: NOW - 60, lastSeen: NOW - 60 };
+  const live = liveSession(t, NOW);
+  assert.ok(live);
+  assert.equal(live.authTime, NOW - 30 * 86_400);
+  assert.ok(!isFresh(live.authTime, NOW), 'destructive actions still need a step-up');
+  assert.equal(liveSession({ ...t, signedInAt: NOW - SESSION_ABSOLUTE_S - 1 }, NOW), null);
+  assert.equal(liveSession({ ...t, signedInAt: NOW + 3600 }, NOW), null, 'future-dated issue time');
+  assert.equal(liveSession({ ...t, signedInAt: 'today' }, NOW), null, 'a malformed signedInAt falls back to authTime, here past 24 h');
+});
+
+test('authTime comes from the ID token auth_time claim, never later than now; else the server clock (V-6)', () => {
+  assert.equal(authTimeFrom(NOW - 3600, NOW), NOW - 3600);
+  assert.equal(authTimeFrom(NOW - 3600.9, NOW), NOW - 3601);
+  assert.equal(authTimeFrom(NOW + 120, NOW), NOW, 'clock skew never makes a session fresher than now');
+  for (const missing of [undefined, null, '1790000000', 0, -5, Number.NaN, Number.POSITIVE_INFINITY, {}]) {
+    assert.equal(authTimeFrom(missing, NOW), NOW, String(missing));
+  }
+});
+
+test('a step-up sign-in forces re-authentication at Google; a plain sign-in keeps the chooser (G-31)', () => {
+  assert.deepEqual(googleAuthParams({ hd: null, stepUp: false }), {});
+  assert.deepEqual(googleAuthParams({ hd: 'district.org', stepUp: false }), { hd: 'district.org' });
+  assert.deepEqual(googleAuthParams({ hd: 'district.org', stepUp: true }), { hd: 'district.org', prompt: 'login', max_age: '0' });
+  assert.deepEqual(googleAuthParams({ hd: null, stepUp: true }), { prompt: 'login', max_age: '0' });
 });
 
 test('the 24 h absolute window ends the session even with recent activity', () => {

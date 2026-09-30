@@ -5,14 +5,13 @@
 // plaintext never reaches the server or its statement log. The plaintext goes to a new mode-600 file
 // (--out), or with --show to this terminal once.
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { existsSync, statSync, unlinkSync } from 'node:fs';
-import path from 'node:path';
-import { UsageError, dryRunNote, isLocalDb, isMain, printPlan, runScript, writeAudit, writeSecretFile } from './lib-ops.mjs';
+import { existsSync } from 'node:fs';
+import { UsageError, assertOutsideRepo, auditLanded, dryRunNote, isLocalDb, isMain, printPlan, runScript, settleOutFile, writeAudit, writeSecretFile } from './lib-ops.mjs';
 
 const USAGE = `usage:
   node scripts/rotate-db-password.mjs --role recover_web|recover_worker --out <new file> [--yes]
   node scripts/rotate-db-password.mjs --role recover_web|recover_worker --show [--yes]
---out writes the new password to a new file with mode 600 (an existing file is never overwritten).
+--out writes the new password to a new file outside the repository, mode 600 (never overwritten).
 --show prints it once instead. Without --yes nothing changes (dry run).
 Common options: --db <url> (else env DB_URL, .env.local, local stack), --dry-run, --help.`;
 
@@ -54,11 +53,8 @@ export async function run({ values, apply, sql, requestId, say, dbUrl }) {
   if (!ROLES.includes(role)) throw new UsageError(`--role must be one of ${ROLES.join(', ')}`);
   const show = values.show === true;
   if (show === Boolean(values.out)) throw new UsageError('give exactly one of --out <file> or --show');
-  const out = values.out ? path.resolve(values.out) : null;
+  const out = values.out ? assertOutsideRepo(values.out) : null;
   if (out && existsSync(out)) throw new UsageError(`${out} already exists; choose a new file (it is never overwritten)`);
-  if (out && !(existsSync(path.dirname(out)) && statSync(path.dirname(out)).isDirectory())) {
-    throw new UsageError(`directory ${path.dirname(out)} does not exist`);
-  }
 
   const [r] = await sql`select rolcanlogin from pg_roles where rolname = ${role}`;
   if (!r) throw new Error(`role ${role} does not exist in this database`);
@@ -94,7 +90,18 @@ export async function run({ values, apply, sql, requestId, say, dbUrl }) {
       });
     });
   } catch (e) {
-    if (file) unlinkSync(file); // the file would hold a password that was never set
+    // The commit can land even when the client sees an error; never lose the only copy of a live password.
+    if (file) {
+      await settleOutFile(sql, requestId, file, say);
+    } else {
+      const landed = await auditLanded(sql, requestId);
+      if (landed !== false) {
+        say(landed
+          ? 'WARNING: the change WAS committed although the client saw an error. The new password follows once.'
+          : 'WARNING: could not confirm whether the change committed. The password it would have set follows once; test it before relying on it.');
+        console.log(`\n  ${password}\n`);
+      }
+    }
     throw e;
   }
   say(`${role} password rotated (request_id ${requestId})`);

@@ -10,6 +10,7 @@ const DAY = 86_400;
 const PURGE_KINDS = [
   'devices', 'device_links', 'closed_reports', 'report_matches', 'idempotency_keys', 'search_events',
   'health_checks', 'rate_counters', 'jobs', 'screening_runs', 'deletion_evidence', 'device_rejections', 'media_tickets',
+  'error_rollup', // 0410 (security review L1)
 ];
 // Contract section 7 job kinds a retention rule may name (plus the two non-job markers).
 const JOB_KINDS = new Set([
@@ -60,11 +61,10 @@ test('thresholds match the 14 table', () => {
 test('contract section 3 additions are present', () => {
   assert.deepEqual(find('device_rejections').map((r) => [r.seconds, r.job]), [[30 * DAY, 'purge:device_rejections']]);
   assert.deepEqual(find('media_tickets').map((r) => [r.seconds, r.job]), [[DAY, 'purge:media_tickets']]);
-  const rollup = find('error_rollup');
-  assert.equal(rollup.length, 1);
-  assert.equal(rollup[0].seconds, null);
-  assert.match(rollup[0].threshold, /indefinite/);
-  assert.match(rollup[0].threshold, /aggregate/);
+});
+
+test('error_rollup is purged after 90 days, because an unauthenticated beacon writes it (0410)', () => {
+  assert.deepEqual(find('error_rollup').map((r) => [r.seconds, r.job]), [[90 * DAY, 'purge:error_rollup']]);
 });
 
 test('rows that minimize content name the fields they clear', () => {

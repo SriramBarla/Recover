@@ -7,16 +7,15 @@
 //   --finish     previous = '' once recover-web mints with N+1 and has been live for 60 s
 //   --emergency  current = previous = '' (every staff request fails closed until --next is deployed)
 import { randomBytes } from 'node:crypto';
-import { existsSync, unlinkSync } from 'node:fs';
-import path from 'node:path';
-import { UsageError, dryRunNote, isMain, pickAction, printPlan, runScript, writeAudit, writeSecretFile } from './lib-ops.mjs';
+import { existsSync } from 'node:fs';
+import { UsageError, assertOutsideRepo, dryRunNote, isMain, pickAction, printPlan, runScript, settleOutFile, writeAudit, writeSecretFile } from './lib-ops.mjs';
 
 const USAGE = `usage:
   node scripts/rotate-assertion-key.mjs                              show the pointers and stored versions
   node scripts/rotate-assertion-key.mjs --next --out <new file> [--yes]
   node scripts/rotate-assertion-key.mjs --finish [--yes]
   node scripts/rotate-assertion-key.mjs --emergency [--yes]
-Without --yes nothing changes (dry run).
+--out is a new file outside the repository (mode 600, never overwritten). Without --yes nothing changes (dry run).
 Common options: --db <url> (else env DB_URL, .env.local, local stack), --dry-run, --help.`;
 
 export const CURRENT = 'staff_assertion_key_current';
@@ -67,7 +66,7 @@ export async function run({ values, apply, sql, requestId, say }) {
   const state = await readState(sql);
   say(`current = ${label(state.current)}, previous = ${label(state.previous)}, stored versions: ${state.versions.map((v) => `v${v}`).join(' ') || '(none)'}`);
   if (!action) return 0;
-  const out = values.out ? path.resolve(values.out) : null;
+  const out = values.out ? assertOutsideRepo(values.out) : null;
   if (action === 'next' && !out) throw new UsageError('--next needs --out <new file> for the recover-web key');
   if (action !== 'next' && out) throw new UsageError('--out is only used with --next');
   if (out && existsSync(out)) throw new UsageError(`${out} already exists; choose a new file (it is never overwritten)`);
@@ -97,7 +96,7 @@ export async function run({ values, apply, sql, requestId, say }) {
         await writeAudit(tx, { ...audit, metadata: { phase: 'next', current_version: p.next, previous_version: p.previous ? Number(p.previous) : null } });
       });
     } catch (e) {
-      unlinkSync(file);
+      await settleOutFile(sql, requestId, file, say); // keeps the file if the commit landed anyway
       throw e;
     }
     say(`v${p.next} is current${p.previous ? `; v${p.previous} still verifies until --finish` : ''} (request_id ${requestId})`);

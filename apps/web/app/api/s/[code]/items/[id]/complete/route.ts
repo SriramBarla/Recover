@@ -36,7 +36,7 @@ export const POST = handle<{ code: string; id: string }>(
     assertSameOrigin(req);
     const meta = await getMeta(code);
     const school = meta.school;
-    const device = getDevice(req, school.id, { create: false });
+    const device = await getDevice(req, school, { create: false });
     if (!device) throw new PublicError('not_found'); // only the posting browser can complete its draft
     const itemId = uuidParam(id);
 

@@ -44,9 +44,17 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 
 - **Dry run by default.** Each script prints its plan and changes nothing. `--yes` applies the plan, and `--dry-run` wins over `--yes`.
 - **Audit row.** Every change writes one `audit_log` row with `actor_kind = 'system'`, `actor_id = 'runbook:<script>'`, and `action = 'runbook.<name>'`. The script prints its `request_id`; copy it into the record.
-- **Database connection.** Scripts connect as the `postgres` admin over the **direct** connection (port 5432), never the pooler app logins. They take the URL from `--db`, else env `DB_URL`, else `DB_URL=` in the repo-root `.env.local`, else the local stack.
-  - In production, keep the password off the command line and out of shell history: `read -rs DB_URL && export DB_URL`.
-- **No secrets in output.** Scripts never print secret values. The two exceptions are the key and password files you ask for with `--out` (mode 600, never overwritten), and `rotate-db-password.mjs --show`.
+- **Database connection.** Scripts connect as the `postgres` admin, never with the app logins and never through the transaction pooler (port 6543). They take the URL from `--db`, else env `DB_URL`, else `DB_URL=` in the repo-root `.env.local`, else the local stack. Use one of:
+  - the **direct** connection, `postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres` (IPv6 unless the IPv4 add-on is enabled);
+  - on an IPv4-only network, the **session pooler**, `postgresql://postgres.<ref>:<pw>@<region pooler host>:5432/postgres`. Note the user `postgres.<ref>` and port 5432.
+
+  In production, keep the password off the command line and out of shell history: `read -rs DB_URL && export DB_URL`.
+- **TLS.** Download the Supabase CA from Dashboard > Database > SSL Configuration and run `export PGSSLROOTCERT=~/supabase-ca.crt`. The scripts then connect with verify-full (certificate chain and host name). Without it they connect with an unverified certificate (`require`) and print a loud warning. [VERIFY] Check in the drill that the CA also validates the session pooler's certificate.
+- **No secrets in output.** Scripts never print secret values. There are two exceptions:
+  - the key and password files you ask for with `--out`. These must be **outside the repository**; the scripts refuse a path inside it. They are mode 600 and never overwritten.
+  - `rotate-db-password.mjs --show`.
+
+  If a rotation fails after its file was written, the script deletes the file only when it has confirmed that nothing was committed. If the commit landed anyway, or the check fails, the file is kept and the script says so.
 
 **Records** go to the district evidence folder (`evidence/<yyyy-mm-dd>-<runbook>/`, outside this repository). They include times, counts, ids, `request_id`s, and who acted. They never include descriptions, photos, device data, or secrets.
 
@@ -280,16 +288,23 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
      2. Set `SUPABASE_S3_ACCESS_KEY_ID` and `SUPABASE_S3_SECRET_ACCESS_KEY` in `recover-worker` only, then redeploy.
      3. Check the new key with `node scripts/reconcile-orphans.mjs`, which only lists.
      4. Revoke the old key.
-  3. **Scheduler bearer.**
-     1. Generate a new value and its hash:
+  3. **Scheduler bearer.** The bearer itself is never printed.
+     1. Generate it into a new mode-600 file outside the repository. Only its SHA-256 is printed:
 
         ```bash
-        node -e "const c=require('crypto');const b=c.randomBytes(32).toString('base64url');console.log(b);console.log(c.createHash('sha256').update(b).digest('hex'))"
+        node -e "const c=require('crypto'),fs=require('fs');const b=c.randomBytes(32).toString('base64url');fs.writeFileSync(process.argv[1],b,{mode:0o600,flag:'wx'});console.log('SCHEDULER_BEARER_SHA256='+c.createHash('sha256').update(b).digest('hex'))" ~/scheduler-bearer.txt
         ```
 
-     2. Store the bearer in Vault: `select vault.update_secret((select id from vault.secrets where name = 'scheduler_bearer'), '<bearer>');`
-     3. Set `SCHEDULER_BEARER_SHA256` in `recover-worker` to the hash, and redeploy.
+     2. Store it in Vault straight from the file, so it never appears on screen or in shell history. psql reads the file into a variable:
+
+        ```
+        \set bearer `cat ~/scheduler-bearer.txt`
+        select vault.update_secret((select id from vault.secrets where name = 'scheduler_bearer'), :'bearer');
+        ```
+
+     3. Set `SCHEDULER_BEARER_SHA256` in `recover-worker` to the printed hash, and redeploy.
      4. Drains return 401 between the two changes, which is harmless because the next minute retries.
+     5. Copy the bearer from the file into the password manager (the fallback scheduler in runbook 20 needs it), then delete the file with `rm -P`.
   4. **Staff-assertion key:** runbook 17.
   5. **Device key:** runbook 21.
   6. **Internal secrets.**
@@ -318,13 +333,13 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
   4. **Immediately** run `node scripts/restore-quarantine.mjs --begin --yes`, then continue with runbook 12. This:
      - disables every pg_cron job;
      - sets `worker_mode = quarantine` and turns the three global switches off;
-     - writes the audit-gap row;
-     - queues the expiry jobs.
+     - queues the expiry jobs;
+     - writes one audit row (`runbook.restore_quarantine`, phase begin) that also records the audit gap.
   5. **What is lost (RPO 24 hours, §16.1):** database changes since the backup. That means posts, reviews, custody changes, lost reports, device blocks, and identity rebinds, plus audit rows (the gap is recorded as a row). Media is never recreated:
      - objects deleted after the backup stay deleted, and rows that still point at them are reconciled;
      - objects uploaded after the backup become orphans.
 - **Verify:** as in runbook 12.
-- **Record:** the restore drill report: the backup time against the incident time (actual RPO), start to reopen (actual RTO), the audit-gap `request_id`, and the orphan and missing counts from runbook 12.
+- **Record:** the restore drill report: the backup time against the incident time (actual RPO), start to reopen (actual RTO), the begin row's `request_id` (it carries the audit gap), and the orphan and missing counts from runbook 12.
 
 ## 10. Adding a school
 
@@ -371,17 +386,23 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
      - disables every pg_cron job with `cron.alter_job`;
      - sets `worker_mode = quarantine`, so only `reconcile_generating` and `reconcile_orphan_uploads` lease;
      - turns the three global switches off;
-     - writes `runbook.audit_gap`, recording the last audit id and the restore time;
      - queues `expire_never_arrived`, `mark_disposition_due`, and `expire_reports`, which run at reopen;
+     - writes exactly one audit row, `runbook.restore_quarantine` with phase begin. Its metadata records the audit gap (the last audit id and its time, and the restore time), the cron jobs it disabled, and the switches it turned off;
      - prints the roster checklist.
+
+     Running `--begin` a second time is safe: `--reopen` restores every job disabled by any `--begin` since the last reopen.
   2. **Roster (§16.5 step 3).**
      1. Get the directory export from district IT and run `node scripts/restore-quarantine.mjs --directory export.csv`. It lists every live membership whose email is missing from the export.
      2. Deactivate each of them (runbook 5).
      3. Repeat any identity rebind made after the backup.
   3. **Suppressions.** Device blocks added after the backup are gone. Re-block repeat devices as they reappear (runbook 4).
-  4. **Media (§16.5 step 6).** Run `node scripts/reconcile-orphans.mjs` (a dry run):
-     - **Missing objects** are rows that point at deleted objects. Pull every published item whose variants are missing (runbook 3 step 1, or its break-glass SQL). Never re-upload.
-     - **Orphans** are objects uploaded after the backup. Delete them with `--yes` after review.
+  4. **Media (§16.5 step 6).** Reconcile twice.
+     1. **Right after `--begin`,** run `node scripts/reconcile-orphans.mjs --min-age-hours 1` (a dry run). The default 24-hour minimum age would hide objects uploaded after the backup when the restore happens within a day of them.
+     2. **Again 24 hours later,** run it with the default age. This catches uploads that were in flight during the restore.
+
+     Each run covers `incoming`, `originals`, `variants`, `map_drafts`, and `maps`:
+     - **Missing objects** are rows that point at deleted objects. Pull every published item whose variants are missing (runbook 3 step 1, or its break-glass SQL). An approved map with a missing public object needs a new version (runbooks 6 and 19). Never re-upload.
+     - **Orphans** are objects uploaded after the backup. Delete them by repeating the same command with `--yes` after review.
   5. **Reads.** There is no read switch.
      - **In-place restore:** the feed serves the restored rows at once, so do step 4 first. Items claimed after the backup may reappear; staff re-claim them.
      - **New project:** reads switch over here, by pointing the web `DATABASE_URL` at the restored project.
@@ -390,7 +411,7 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
      1. Run `node scripts/restore-quarantine.mjs` with no flags. Every pg_cron job must still be inactive, because a migration can reschedule them.
      2. Two owners sign the checkpoint note.
   8. **Reopen.**
-     1. Run `node scripts/restore-quarantine.mjs --reopen --yes`. This re-enables the recorded cron jobs, matched by name, and sets `worker_mode = normal`. The queued expiry work runs on the next drain.
+     1. Run `node scripts/restore-quarantine.mjs --reopen --yes`. This re-enables every cron job disabled by a `--begin` since the last reopen, matched by name or id, and sets `worker_mode = normal`. The queued expiry work runs on the next drain.
      2. Restore the real `SCHEDULER_BEARER_SHA256` in `recover-worker` and redeploy (runbook 9 step 2).
   9. **Posting last.** Once `node scripts/jobs.mjs --summary` shows the expiry jobs done, run `node scripts/switch.mjs --district posting=on lost_reports=on cross_school=on --yes`.
 - **Verify:**
@@ -398,7 +419,7 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
   - `restore-quarantine.mjs` shows every cron job active;
   - `reconcile-orphans.mjs` reports no missing objects on published items;
   - the SQL suite is green.
-- **Record:** the begin and reopen `request_id`s, the audit-gap row id, the roster changes, the orphan and missing counts, the SQL suite result, the checkpoint signatures, and the times (the drill report's RTO).
+- **Record:** the begin and reopen `request_id`s (the begin row carries the audit gap), the roster changes, the orphan and missing counts from both reconcile runs, the SQL suite result, the checkpoint signatures, and the times (the drill report's RTO).
 
 ## 13. Worker stuck / dead-letter
 
@@ -413,10 +434,10 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
      select j.jobname, d.status, d.return_message, d.start_time
        from cron.job_run_details d join cron.job j using (jobid)
       order by d.start_time desc limit 10;
-     select id, status_code, timed_out, error_msg, created from net._http_response order by created desc limit 10;
      ```
 
-     - Failing pg_cron or pg_net calls: runbook 20.
+     - A `recover_drain` run that failed says why in `return_message`: `cron_drain: worker returned HTTP <status>` or `cron_drain: worker unreachable: <error>`. A drain that times out after 5 s while the worker keeps draining counts as success.
+     - Failing pg_cron runs or drain calls: runbook 20.
      - `401`s: the bearer hash (runbook 8) or deployment protection (O-24).
      - `5xx`s: check the `recover-worker` deployment logs and roll back the deployment.
   3. **Inspect leases** with `node scripts/jobs.mjs --running`. Expired leases are requeued, or dead-lettered at max attempts, by `system_reap_leases` at the start of every drain.
@@ -517,10 +538,12 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
   1. Run `node scripts/rotate-assertion-key.mjs --emergency --yes`, which clears both pointers. Every staff request now fails `assertion_invalid`, closed.
   2. Immediately run `--next --out <file> --yes`. It creates v(max+1) with `previous` empty, so the revoked key never verifies again.
   3. Set the web env and redeploy. Staff are locked out for one deploy cycle.
-- **Verify:** a staff action (approve or receive) succeeds after the deploy. Before `--finish`, both versions verify; after it, only `current` does:
+- **Verify:** a staff action (approve or receive) succeeds after the deploy. Before `--finish`, both versions verify; after it, only `current` does. `node scripts/rotate-assertion-key.mjs` prints the pointers, or query them directly. The pointers hold version numbers, not keys; never select `decrypted_secret` for a `staff_assertion_key_v<n>` row.
 
   ```sql
-  select name from vault.secrets where name like 'staff_assertion_key%' order by name;
+  select name, btrim(decrypted_secret) as version from vault.decrypted_secrets
+   where name in ('staff_assertion_key_current', 'staff_assertion_key_previous') order by name;
+  select name from vault.secrets where name ~ '^staff_assertion_key_v[0-9]+$' order by name;  -- stored versions, names only
   ```
 
 - **Record:** the old and new version numbers, the times, and the `request_id`s. Never record the key.
@@ -531,17 +554,21 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 - **Severity:** district.
 - **Owner:** the district admin, on a machine allowed to hold the worker S3 key.
 - **Steps:**
-  1. Run `node scripts/reconcile-orphans.mjs`, which is a dry run. S3 settings come from `--worker-env <file>`, else the exported `SUPABASE_S3_*` variables, else `apps/worker/.env.local`. The key must never go into `recover-web`. The script lists `incoming`, `originals`, and `variants`, and compares every key with `item_photos` and the unverified deletion ledger. It classifies each object as:
+  1. Run `node scripts/reconcile-orphans.mjs`, which is a dry run. S3 settings come from `--worker-env <file>`, else the exported `SUPABASE_S3_*` variables, else `apps/worker/.env.local`. The key must never go into `recover-web`. The script lists `incoming`, `originals`, `variants`, `map_drafts`, and `maps`, and compares every key with `item_photos`, `map_versions`, and the unverified deletion ledger. It classifies each object as:
      - `referenced`, `pending_deletion`;
      - `no_row` or `unreferenced` (the two orphan classes);
      - `too_new` (younger than `--min-age-hours`, default 24);
      - `unrecognized` (never deleted);
      - `missing` (a DB path with no object).
-  2. Review the orphans. Public variant keys are shown with the token masked; `--show-keys` shows them in full.
-  3. Delete them with `--yes`, capped by `--max-delete` (default 500). Each key is re-checked against the database immediately before its `DELETE`.
-  4. **Missing objects are never recreated.** Pull published items whose variants are missing (runbook 3). Leave the rest to the retention jobs.
+  2. Review the orphans. Public object tokens (variants and maps) are masked; `--show-keys` shows them in full.
+  3. Delete them with `--yes`, capped by `--max-delete` (default 500). Immediately before each `DELETE`:
+     - the key is looked up in the database again and must still be an orphan;
+     - a `HEAD` must show the same object the listing saw (same ETag).
+
+     Anything else is skipped and counted. The audit row is written even when the run fails or is interrupted with Ctrl-C.
+  4. **Missing objects are never recreated.** Pull published items whose variants are missing (runbook 3). An approved map with a missing public object needs a new version (runbooks 6 and 19). Leave the rest to the retention jobs.
 - **Verify:** a second dry run reports no orphans older than the minimum age.
-- **Record:** the counts per bucket and class (the `runbook.reconcile_orphans` row carries them) and the `request_id`.
+- **Record:** the counts per bucket and class, including the skipped counts and whether the run was interrupted or aborted (the `runbook.reconcile_orphans` row carries them), and the `request_id`.
 
 ## 19. Public map review
 
@@ -559,14 +586,14 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 
 ## 20. Worker scheduler fallback
 
-- **Trigger:** `alert.worker_stale` or `alert.health_gap`, failing rows in `cron.job_run_details`, or errors in `net._http_response`. Drill it once a term.
+- **Trigger:** `alert.worker_stale` or `alert.health_gap`, or failing rows in `cron.job_run_details`, including `recover_drain` runs that name an HTTP status or a connection error. Drill it once a term.
 - **Severity:** district.
 - **Owner:** the district admin with the maintainer.
 - **Steps:**
   1. **Find which half is failing.** `select jobid, jobname, schedule, active from cron.job order by jobid;` then use the two queries in runbook 13 step 2.
-     - `recover_drain` is the one-minute HTTP call (`private.cron_drain()`, through pg_net).
-     - The other jobs are SQL enqueues (`private.enqueue_periodic`) and need no pg_net.
-  2. **If pg_net fails but pg_cron runs,** switch only the drain to an external scheduler:
+     - `recover_drain` is the one-minute HTTP call (`private.cron_drain()`, through the `http` extension). pg_net must stay disabled (DEPLOY.md step 10).
+     - The other jobs are SQL enqueues (`private.enqueue_periodic`) and make no HTTP calls.
+  2. **If the drain call fails but pg_cron runs,** switch only the drain to an external scheduler:
      1. Disable the drain: `select cron.alter_job((select jobid from cron.job where jobname = 'recover_drain'), active := false);`
      2. On a district-controlled host, add a crontab entry. The bearer comes from the password manager and is the same value as the Vault `scheduler_bearer`:
 
@@ -575,36 +602,71 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
         ```
 
      3. Vercel Cron is not a drop-in replacement, because it only sends GET. `scripts/dev.mjs` does the same POST locally.
-  3. **If pg_cron itself is down,** the periodic enqueues stop too. Until it is back, enqueue by hand:
-     - every 15 minutes: `node scripts/jobs.mjs --enqueue expire_never_arrived --yes`, and the same for `expire_reports` and `reconcile_generating`;
-     - hourly: `mark_disposition_due`, `purge_drafts`, and `reconcile_orphan_uploads`.
+  3. **If pg_cron itself is down,** the periodic enqueues stop too, including the 5-minute health check. Until it is back, enqueue the maintenance jobs from the same district host with `node scripts/jobs.mjs --enqueue <kind> --yes`, on the pg_cron cadence:
 
-     The nightly rollups and purges wait for pg_cron.
-  4. **Switch back:** `select cron.alter_job((select jobid from cron.job where jobname = 'recover_drain'), active := true);`, then remove the external crontab entry.
+     | Cadence | Kinds |
+     |---|---|
+     | every 5 minutes | `evaluate_alerts` |
+     | every 15 minutes | `expire_never_arrived`, `expire_reports`, `reconcile_generating` |
+     | hourly | `mark_disposition_due`, `purge_drafts`, `reconcile_orphan_uploads` |
+     | nightly (07:15 UTC) | `anonymize_rejected`, `clear_terminal_item_text` |
+
+     **Crontab note.** The host needs the admin `DB_URL` and `PGSSLROOTCERT` for as long as this runs.
+     - Keep them in a mode-600 file readable only by the account that runs cron, for example `~/.recover-ops.env` containing `export DB_URL=...` and `export PGSSLROOTCERT=...`.
+     - Delete the file as soon as pg_cron is back.
+
+     With a checkout in `/opt/recover`:
+
+     ```
+     */5 * * * *  . ~/.recover-ops.env && cd /opt/recover && node scripts/jobs.mjs --enqueue evaluate_alerts --yes >/dev/null
+     */15 * * * * . ~/.recover-ops.env && cd /opt/recover && for k in expire_never_arrived expire_reports reconcile_generating; do node scripts/jobs.mjs --enqueue $k --yes; done >/dev/null
+     0 * * * *    . ~/.recover-ops.env && cd /opt/recover && for k in mark_disposition_due purge_drafts reconcile_orphan_uploads; do node scripts/jobs.mjs --enqueue $k --yes; done >/dev/null
+     15 7 * * *   . ~/.recover-ops.env && cd /opt/recover && for k in anonymize_rejected clear_terminal_item_text; do node scripts/jobs.mjs --enqueue $k --yes; done >/dev/null
+     ```
+
+     Each enqueue writes one `runbook.jobs_enqueue` audit row, and an enqueue that pg_cron already made in the same minute is skipped. `rollup_daily_stats` and the purges need payloads, so they wait for pg_cron.
+  4. **Switch back:** `select cron.alter_job((select jobid from cron.job where jobname = 'recover_drain'), active := true);`, then remove the external crontab entries and delete `~/.recover-ops.env`.
 - **Verify:** `node scripts/jobs.mjs --summary` shows a heartbeat under 2 minutes old and the oldest due job under 10 minutes; `health_checks` has no gap.
 - **Record:** the window, the fallback used, and the switch-back time.
 
 ## 21. Device-key rotation
 
-- **Trigger:** a scheduled rotation, or a suspected leak of `DEVICE_KEY_V1`.
+- **Trigger:** a scheduled rotation, or a suspected leak of the current device key (`DEVICE_KEY_V<n>` for the version in `DEVICE_KEY_CURRENT`, which is 1 until the first rotation).
 - **Severity:** district.
 - **Owner:** the district admin with the maintainer.
-- **Current limit:** `apps/web/lib/device.ts` derives digests with `DEVICE_KEY_V1` only (version byte 1). The dual-derivation window in `13-Abuse-and-Rate-Limiting.md` is **not implemented yet**. A planned rotation needs that web change first: derive with both keys, match either, write with the new one.
-- **Steps:**
-  1. **Assess the risk.** A leaked device key alone does not expose students. Reading a report or item status also needs that device's HttpOnly cookie token, and digests are school-scoped HMACs. A planned rotation can therefore wait for the dual-derivation change.
-  2. **Once dual derivation exists:**
-     1. Add `DEVICE_KEY_V2` to `recover-web` and deploy.
-     2. Keep V1 for `lost_report_ttl_days` (60 days), so open reports stay reachable.
-     3. Remove V1 and redeploy.
-  3. **If a rotation cannot wait,** replace `DEVICE_KEY_V1` and redeploy, knowingly:
+- **How the window works:**
+  - A device digest is `version byte || HMAC(DEVICE_KEY_V<version>, school id || token)` (`13-Abuse-and-Rate-Limiting.md`). `recover-web` writes and looks up every digest with the version in `DEVICE_KEY_CURRENT`.
+  - While `DEVICE_KEY_PREVIOUS` is also set, a browser's first device-bound request at a school moves that browser's rows there to its current-key digest (`api_device_rekey`): items, lost reports, its block and reputation, rate counters, and idempotency keys. The browser keeps its cookie and notices nothing.
+  - The window lasts `lost_report_ttl_days`, so every open report either moves or expires before the old key goes. During the window, each device-bound request makes one extra database call.
+  - A moved item or report gets a new `row_version`. A staff screen, or a student page, that listed it before the move reports it as changed once, and a reload fixes it.
+  - Pages still served by the previous deployment (a tab left open under skew protection) keep the old key until they reload. Anything they write moves on the browser's next request to the new deployment.
+- **Steps** (the first rotation, 1 to 2; a later one is the same with each number one higher):
+  1. **Assess the risk.** A leaked device key alone does not expose students. Reading a report or item status also needs that device's HttpOnly cookie token, and digests are school-scoped HMACs. Use the window (step 2) unless the old key must stop working at once (step 4).
+  2. **Open the window.**
+     1. Generate the new key into a new mode-600 file outside the repository. Nothing is printed:
+
+        ```bash
+        node -e "require('fs').writeFileSync(process.argv[1],require('crypto').randomBytes(32).toString('base64url'),{mode:0o600,flag:'wx'})" ~/device-key-v2.txt
+        ```
+
+     2. Add it to `recover-web` production with `vercel env add DEVICE_KEY_V2 production < ~/device-key-v2.txt`, then delete the file with `rm -P`.
+     3. Set `DEVICE_KEY_CURRENT` to `2` and `DEVICE_KEY_PREVIOUS` to `1` (`vercel env rm` / `vercel env add ... production`).
+     4. Redeploy `recover-web`. All three variables must go out in the same deployment: `DEVICE_KEY_CURRENT=2` without `DEVICE_KEY_PREVIOUS` is the forced rotation of step 4.
+  3. **Close the window** once `lost_report_ttl_days` have passed (`select lost_report_ttl_days from public.district_settings;`, 60 by default). Remove `DEVICE_KEY_PREVIOUS` and `DEVICE_KEY_V1` from `recover-web`, and redeploy. Rows still on key 1 belong to browsers that did not come back during the window. Their open reports have expired by then, and their other rows stay unreachable from those browsers, as in step 4.
+  4. **If the old key must stop working now,** add `DEVICE_KEY_V2`, set `DEVICE_KEY_CURRENT=2`, and remove `DEVICE_KEY_V1` without setting `DEVICE_KEY_PREVIOUS`. Redeploy, knowingly:
      - every open lost report becomes unreachable from its device (the accepted risk F-66: staff still see the reports, and students can file again);
      - device reputation and blocks restart.
-- **Verify:** a lost report filed before the rotation is still listed at `/s/<CODE>/lost/mine` on the same browser. With the forced path, confirm that new posts and reports work.
-- **Record:** the date, the path taken, and the count of open reports affected:
+- **Verify:**
+  - After each deploy, the `recover-web` logs have no `device_keys_invalid` error. After closing the window, they have no `device_keys_unused` warning either (that warning names a key no version uses).
+  - A lost report filed before the rotation is still listed at `/s/<CODE>/lost/mine` on the same browser.
+  - During the window, open reports move to the new version byte as their browsers come back:
 
-  ```sql
-  select count(*) from public.lost_reports where status = 'open';
-  ```
+    ```sql
+    select get_byte(device_token_hash, 0) as key_version, count(*) from public.lost_reports where status = 'open' group by 1 order by 1;
+    ```
+
+  - With the forced path, confirm that new posts and reports work.
+- **Record:** the dates the window opened and closed (or the date of the forced path), the key versions, and the counts from the query above at both points.
 
 ## 22. Storage-root credential incident
 
@@ -614,9 +676,13 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 - **Steps:**
   1. **Stop posting and media work:** `node scripts/switch.mjs --district posting=off lost_reports=off worker_mode=quarantine --yes`. In quarantine, only the reconciliation kinds lease.
   2. **Rotate the key.** At Dashboard > Storage > S3 Connection, revoke the leaked key and create a new one. Set `SUPABASE_S3_*` in `recover-worker` only, and redeploy.
-  3. **Reconcile every prefix:** run `node scripts/reconcile-orphans.mjs` with the new key (a dry run), then:
-     - review `unrecognized` keys and any recent `LastModified` among the orphans;
-     - review missing objects on published items (pull them).
+  3. **Reconcile every bucket, and list everything written during the exposure window.** Use the new key and run `node scripts/reconcile-orphans.mjs --since <exposure start, ISO time>` (a dry run). It covers `incoming`, `originals`, `variants`, `map_drafts`, and `maps`. Besides the usual classes, it lists **every** object modified since that time, whether referenced or not, next to the time its database row last changed. Keep the list in the evidence folder, then:
+     - **Overwritten live objects.** A referenced object flagged `written after its row` changed long after the database last touched it, so treat it as overwritten:
+       - for a variant, pull the item (runbook 3) and repost it through staff;
+       - for a public map, have a clean version reviewed and activated (runbooks 6 and 19);
+       - for an original or a draft, reprocess it from a trusted source, or drop the photo.
+     - **Unexpected writes.** Review orphans and `unrecognized` keys written in the window as attacker candidates. Delete orphans with `--yes` after review.
+     - **Missing objects.** Pull published items whose objects are missing.
   4. **Review worker logs** in Vercel for the exposure window.
   5. **Prove the web never held the key:**
      - `vercel env ls production` in `recover-web` lists no `SUPABASE_S3_*` names;
@@ -628,10 +694,10 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
      3. `node scripts/switch.mjs --district posting=on lost_reports=on --yes`.
 - **Verify:**
   - the old key is rejected;
-  - the dry run shows nothing unexplained;
+  - the `--since` list has every object explained, or pulled and replaced;
   - the web environment is clean;
   - the queue drains in normal mode.
-- **Record:** the timeline, the key rotation time, the reconciliation counts, and the evidence of the web environment check.
+- **Record:** the timeline, the key rotation time, the exposure window, the `--since` list with its dispositions, the reconciliation counts, and the evidence of the web environment check.
 
 ## 23. Calendar horizon
 
@@ -645,7 +711,7 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
   2. Export the next term from the district calendar as CSV with the header `day,is_open,open_at,close_at` (for example `2027-01-04,true,07:30,16:30` and `2027-01-18,false,,`).
   3. Run `node scripts/calendar-horizon.mjs --school <CODE> --extend next-term.csv`. The plan shows the days added and changed and the horizon before and after. Repeat with `--yes`.
      - Changing a day that already exists needs `--allow-changes`.
-     - Arrival deadlines that were already computed are not recomputed; late check-in covers them (G-01).
+     - Open arrival deadlines are recomputed in the same transaction by the calendar trigger (`0011_calendar_recompute.sql`, G-01).
 - **Verify:** the horizon is 45 days or more (90 or more for a school in onboarding), and the alert clears after the next health check.
 - **Record:** the `runbook.calendar_extend` `request_id` and the new covered-through date.
 
@@ -656,13 +722,13 @@ The other sections follow in §23 order: [1](#1-queue-backlog-at-a-school) · [2
 - **Owner:** the district admin.
 - **Steps:**
   1. Run `node scripts/audit-privacy-sample.mjs --sample 1000` (the newest rows) and `node scripts/audit-privacy-sample.mjs --random --sample 1000`. The script checks every key and value in `state_before`, `state_after`, and `metadata`, and `actor_id` and `target_id`, against these rules:
-     - forbidden keys: description, note, pin, email, digest, path, token, and similar;
-     - values with an `@`;
-     - storage-path-like values (`<uuid>/<uuid>/...`);
+     - forbidden key names: description, note, pin, email, digest, path, token, and similar;
+     - keys **and** values with an `@`;
+     - storage-path-like keys and values (`<uuid>/<uuid>/...`);
      - 64-hex digests;
      - free text of three or more words.
 
-     A finding names the row, action, place, and rule, never the value. The script exits 1 on FAIL.
+     A finding names the row, action, place, and rule, never the value. A key is shown only when it is a plain identifier that breaks no rule; any other key appears as `<key n redacted>`, n being its position in the object. A key violation is reported as `key_<rule>`. The script exits 1 on FAIL.
   2. **On PASS,** record the result with `--yes`, which writes `runbook.audit_privacy_sample` with the counts.
   3. **On FAIL:**
      1. fix the writer (`private.audit_guard`, `packages/shared/src/audit.ts`, or the function that wrote the row) and add a test;

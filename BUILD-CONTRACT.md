@@ -35,7 +35,7 @@ Owner decisions of 2026-09-30:
 
 **Storage.** The S3 endpoint is `http://127.0.0.1:55421/storage/v1/s3`, region `local`. Keys come from `supabase status -o env` (`S3_PROTOCOL_ACCESS_KEY_ID`, `S3_PROTOCOL_ACCESS_KEY_SECRET`). The public object base is `http://127.0.0.1:55421/storage/v1/object/public`.
 
-**Apps.** Web on `http://localhost:3000`, worker on `http://localhost:3001`. `npm run dev` (`scripts/dev.mjs`) starts web, worker, and a dev scheduler that POSTs the worker drain every 10 s. The dev scheduler is the local stand-in for `pg_cron`/`pg_net`, which remains the production path.
+**Apps.** Web on `http://localhost:3000`, worker on `http://localhost:3001`. `npm run dev` (`scripts/dev.mjs`) starts web, worker, and a dev scheduler that POSTs the worker drain every 10 s. The dev scheduler is the local stand-in for `pg_cron` calling the drain through the `http` extension, which remains the production path.
 
 **Reset.** `supabase db reset` applies `supabase/migrations/*.sql` in filename order, then `supabase/seed.sql`.
 
@@ -539,7 +539,6 @@ The web helper `apps/web/lib/worker.ts` adds the right header.
 | `DEVICE_KEY_V1`, `IP_KEY`, `SEARCH_KEY` | base64url 32-byte keys |
 | `WORKER_URL` | where the worker runs |
 | `WORKER_DEV_SECRET`, `RECOVER_DEV_AUTH=1` | dev-only worker authentication |
-| `WORKER_OIDC_AUDIENCE` | production only |
 | `STORAGE_PUBLIC_URL` | public object base URL |
 | `S3_ORIGIN` | for CSP `connect-src` |
 | `REVALIDATE_SECRET_SHA256`, `READY_SECRET_SHA256` | internal endpoint secrets (hashes) |
@@ -555,9 +554,10 @@ The web helper `apps/web/lib/worker.ts` adds the right header.
 | `CONTENT_KEY` | fingerprint HMAC key |
 | `SCHEDULER_BEARER_SHA256` | scheduler bearer hash |
 | `WORKER_DEV_SECRET`, `RECOVER_DEV_AUTH=1` | dev-only web authentication |
-| `WEB_OIDC_ISSUER`, `WEB_OIDC_AUDIENCE`, `WEB_PROJECT_ID`, `WEB_OWNER_ID` | production OIDC pins |
+| `WEB_OIDC_ISSUER`, `WEB_OIDC_AUDIENCE`, `WEB_PROJECT_ID`, `WEB_OWNER_ID` | production OIDC pins for recover-web's Vercel token (`https://oidc.vercel.com/<team-slug>`, `https://vercel.com/<team-slug>`) |
 | `VISION_MODE` | `mock`, `google`, or `off` |
-| `GCP_WIF_AUDIENCE`, `GCP_SERVICE_ACCOUNT_EMAIL`, `GCP_PROJECT_ID` | Google identity federation |
+| `VISION_MOCK_FLAG=1` | tests only: mock screening reports text on every image |
+| `GCP_WIF_AUDIENCE`, `GCP_SERVICE_ACCOUNT_EMAIL` | Google identity federation |
 | `WEB_URL`, `REVALIDATE_SECRET` | for cache revalidation calls |
 
 `scripts/dev-env.mjs` writes both `.env.local` files with fresh random keys and the local `supabase status` values.
@@ -613,11 +613,15 @@ These were agreed between agents while building and are now part of the contract
 - `system_screening_targets(p_item_id, p_policy_version)` returns `{photos:[{photoId, originalPath}]}`: current photos in `canonical_ready` or `public_ready` that have no screening run for that policy yet.
 - `system_media_ticket_redeem` also returns `itemId` and `publicPath`.
 - `system_deletion_objects` rows also carry `found`, `schoolId`, `itemId`, and `currentPath`.
-- `system_purge` kinds include `map_drafts`.
+- `system_purge` kinds include `map_drafts`. That purge first rejects any draft not submitted within 7 days of creation (reason `abandoned: not submitted within 7 days`, audit action `map.abandon`), then queues `delete_map_draft` for rejected versions.
+- `system_purge` kinds also include `error_rollup`: day rows go 90 days after their UTC day (0410).
+- `system_map_get(p_map_version_id)` returns `{mapVersionId, schoolId, approvalStatus, active, draftPath, draftCanonicalPath, publicPath, width, height}`. An unknown id is `not_found`.
 - Redeeming a `map.upload` ticket schedules `canonicalize_map` 60 s later.
 
 **Rate limits**
-- The actions are `post_item`, `lost_report`, `search`, `status_poll`, and `search_all`. `search_all` has its own budget, the same size as `search`.
+- The actions are `post_item`, `lost_report`, `search`, `status_poll`, `search_all`, `high_value`, and `client_error`. `search_all` has its own budget, the same size as `search`.
+- `high_value` (`POST /api/s/[code]/events/high-value`) and `client_error` (`POST /api/client-error`) are per address only: 20 and 60 per 10 minutes. `client_error` has no school, so it takes `p_school_code` null and its counters use the `district` scope (0210).
+- `api_record_error` signatures may contain one space (`<METHOD> <route>:<Class>`), and the client-error beacon accepts only allowlisted classes and routes.
 - Counters are keyed per window (`<action>:<window>`), so the day and week post limits never share a row.
 
 **Deletion and publication rules**
@@ -630,4 +634,29 @@ These were agreed between agents while building and are now part of the contract
 - The outbox `invalidate_cache` job expires the same tags through `/api/internal/revalidate`.
 
 **Calendar**
-- `0011_calendar_recompute.sql` recomputes open arrival deadlines whenever `school_calendar_days`, or a school's `never_arrived_school_days` or timezone, changes (G-01).
+- `0011_calendar_recompute.sql` recomputes open arrival deadlines for the edited school only, whenever its `school_calendar_days`, `never_arrived_school_days`, or timezone changes (G-01).
+- A recompute counts from `items.arrival_basis_at`, the completion time `/complete` stores. It only moves a deadline later, or fills one that missing coverage left NULL. It never moves one earlier.
+
+**Staff sign-in (web/worker security review, PR #26)**
+- The step-up sign-in (`?reauth=1`) sends `prompt=login` and `max_age=0`. The session's auth time comes from the ID token's `auth_time`, falling back to the server clock if the claim is missing ([VERIFY] V-6: confirm Google sends `auth_time` on this client). The 24-hour session limit runs from `signedInAt`.
+- Dev login and dev worker auth are refused when `NODE_ENV` is `production` as well as on Vercel.
+- The staff complete route checks the item in SQL before it calls the worker.
+
+**Security review fixes (database, PR #27)**
+- pg_net is never installed. `private.cron_drain()` calls the worker synchronously through the `http` extension, so the bearer is never stored in a table. A 5 s timeout is the normal outcome; any other failure fails the cron run with the HTTP status or the connection error.
+- `api_staff_create_item` and `api_staff_map_create_draft` claim the assertion's idempotency key, or its `request_id` when there is none, in `idempotency_keys` (principal kind `staff`, operations `item.create` and `map.create`). A replay returns the first result. The same key with a different body is `idempotency_conflict`.
+- `recover_attestation_owner` reads `private.staff_assertion_keys` (the `staff_assertion_key_*` rows) and has no grant on `vault.decrypted_secrets`.
+- The login roles have USAGE on `public` only, apart from the catalogs. `supabase/tests/security_review.sql` checks all of the above.
+
+**Device-key rotation (T-825; 13 Implementation guide "Device cookie issuance"; RUNBOOK.md section 21)**
+- Web env: `DEVICE_KEY_CURRENT` is the version every digest is written and looked up with (default 1). `DEVICE_KEY_PREVIOUS` is set only during a rotation window and must differ. Each of the two versions needs its `DEVICE_KEY_V<n>` (32 bytes, base64url), so `DEVICE_KEY_V1` is required only while version 1 is current or previous. Startup logs `device_keys_invalid` or `device_keys_unused`, naming variables only.
+- `api_device_rekey(p_school_code, p_old_digest, p_new_digest)` is in the 6.1 family (owner `recover_api_owner`, EXECUTE to `recover_web`). It returns counts `{items, lostReports, deviceRejections, devices, rateCounters, idempotencyKeys}` and moves one browser's rows at one school from its previous-key digest to its current-key digest:
+  - `items.device_token_hash` and `lost_reports.device_token_hash` (any status);
+  - `devices`, merged into an existing current-key row: the older `first_seen_at`, the later `last_seen_at`, and the block that runs later;
+  - `device_rejections`;
+  - device `rate_counters`, where counts of the same window add up;
+  - device `idempotency_keys`, where a current-key row for the same key wins.
+
+  Both digests must be 33 bytes with different version bytes. The call is idempotent and writes no audit row and no job. A moved item or report gets a new `row_version`.
+- During a window, `getDevice` (route handlers) and `cookieDigest` (Server Components) in `apps/web/lib/device.ts` call it for an existing cookie before the request's first device-bound call. A failed move fails the request. Outside a window nothing extra runs.
+- The api family gains DELETE on `devices`, `rate_counters`, and `idempotency_keys` (rows move as delete + upsert), and UPDATE of `device_rejections.device_token_hash`. Index `reports_device_link` covers `lost_reports (school_id, device_token_hash)` where the digest is set. `supabase/tests/device_rekey.sql` checks the move.

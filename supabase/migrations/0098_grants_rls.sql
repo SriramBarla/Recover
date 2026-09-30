@@ -58,9 +58,11 @@ grant execute on all functions in schema private to recover_api_owner, recover_s
 revoke execute on function private.verify_staff_mac(text, int, text) from recover_system_owner;
 grant execute on function private.b64url_encode(bytea), private.b64url_decode(text) to recover_attestation_owner;
 
--- ---------- attestation owner: Vault read for the verifier only ----------
-grant usage on schema vault to recover_attestation_owner;
-grant select on vault.decrypted_secrets to recover_attestation_owner;
+-- ---------- attestation owner: the assertion keys and nothing else in Vault ----------
+-- private.staff_assertion_keys (0010) reads Vault as its owner, the migration role. The decrypt functions it
+-- calls are checked against the querying role, so the attestation owner keeps EXECUTE on them.
+revoke all on private.staff_assertion_keys from public;
+grant select on private.staff_assertion_keys to recover_attestation_owner;
 do $$
 declare
   f record;

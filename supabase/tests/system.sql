@@ -1003,7 +1003,7 @@ declare
   h_blk bytea := extensions.gen_random_bytes(33);
   i_old uuid; i_new uuid; r_old uuid; r_new uuid; r_open uuid; r_m90 uuid; r_m10 uuid; vis uuid; vis2 uuid;
   ph uuid; ph2 uuid; e1 bigint; e2 bigint; e3 bigint; e4 bigint; j_done_old bigint; j_done_new bigint;
-  j_dead_old bigint; j_dead_new bigint; l1 bigint; t_old uuid; t_new uuid; mv uuid;
+  j_dead_old bigint; j_dead_new bigint; l1 bigint; t_old uuid; t_new uuid; mv uuid; mv2 uuid; mv3 uuid;
   r jsonb;
   v_t timestamptz := now() - interval '31 days';
 begin
@@ -1169,6 +1169,44 @@ begin
   r := pg_temp.w(format('select public.system_map_draft_deleted(%L)', mv));
   perform pg_temp.expect((select draft_storage_path is null and draft_canonical_path is null from public.map_versions where id = mv),
                          'map_draft_deleted clears the draft keys');
+
+  -- map_drafts: a draft not submitted within 7 d of creation is abandoned: rejected, audited, then deleted like
+  -- any rejected draft. A 6-day-old draft and a draft in district review are left alone.
+  mv := gen_random_uuid();
+  insert into public.map_versions (id, school_id, draft_storage_path, approval_status, created_at)
+  values (mv, fchs, fchs::text || '/' || mv::text || '/draft', 'draft', now() - interval '8 days');
+  mv2 := gen_random_uuid();
+  insert into public.map_versions (id, school_id, draft_storage_path, approval_status, created_at)
+  values (mv2, fchs, fchs::text || '/' || mv2::text || '/draft', 'draft', now() - interval '6 days');
+  mv3 := gen_random_uuid();
+  insert into public.map_versions (id, school_id, draft_storage_path, width_px, height_px, approval_status, submitted_at, created_at)
+  values (mv3, fchs, fchs::text || '/' || mv3::text || '/draft', 100, 100, 'pending_district', now() - interval '8 days',
+          now() - interval '9 days');
+  r := pg_temp.w($q$select public.system_purge('map_drafts')$q$);
+  perform pg_temp.expect((select approval_status = 'rejected' and rejected_reason like 'abandoned%' and not active
+                            from public.map_versions where id = mv)
+                         and exists (select 1 from public.jobs j where j.kind = 'delete_map_draft'
+                                       and j.dedupe_key = 'delete_map_draft:' || mv::text)
+                         and exists (select 1 from public.audit_log a where a.action = 'map.abandon' and a.target_id = mv::text
+                                       and a.actor_kind = 'system'),
+                         'purge map_drafts: an abandoned draft is rejected, audited, and queued for deletion');
+  perform pg_temp.expect((select approval_status from public.map_versions where id = mv2) = 'draft'
+                         and (select approval_status from public.map_versions where id = mv3) = 'pending_district'
+                         and not exists (select 1 from public.jobs j where j.dedupe_key in ('delete_map_draft:' || mv2::text,
+                                                                                           'delete_map_draft:' || mv3::text)),
+                         'purge map_drafts: a 6-day-old draft and a draft in district review are kept');
+
+  -- error_rollup (0410, security review L1): day rows older than 90 days go; day 90 and newer stay
+  insert into public.error_rollup (day, signature, count)
+  values ((now() at time zone 'UTC')::date - 91, 'zz_test:old', 5),
+         ((now() at time zone 'UTC')::date - 90, 'zz_test:edge', 5),
+         ((now() at time zone 'UTC')::date, 'zz_test:today', 5);
+  perform pg_temp.expect('error_rollup' = any (private.sys_purge_kinds()), 'error_rollup is a purge kind (0450 enqueues it nightly)');
+  r := pg_temp.w($q$select public.system_purge('error_rollup')$q$);
+  perform pg_temp.expect((r->>'count')::int >= 1 and r->>'kind' = 'error_rollup'
+                         and (select array_agg(signature order by signature) from public.error_rollup where signature like 'zz\_test:%')
+                             = array['zz_test:edge', 'zz_test:today'],
+                         'purge error_rollup: 90 d after the UTC day');
 end $$;
 
 -- =====================================================================================================

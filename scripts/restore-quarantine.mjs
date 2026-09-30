@@ -5,12 +5,14 @@
 //                worker (G-06);
 //             2. worker_mode = 'quarantine' (only reconcile_generating and reconcile_orphan_uploads lease)
 //                and the three district global switches off;
-//             3. audit-gap row: the last audit id in the restored database plus the restore timestamp;
-//             4. recompute expiries by enqueueing expire_never_arrived, mark_disposition_due and
+//             3. recompute expiries by enqueueing expire_never_arrived, mark_disposition_due and
 //                expire_reports (they run once --reopen returns the worker to normal);
+//             4. exactly one audit row (runbook.restore_quarantine, phase begin) that also records the
+//                audit gap: the last audit id in the restored database plus the restore timestamp;
 //             5. roster-review checklist (with --directory <export>: members missing from the export).
-//   --reopen  re-enable the cron jobs --begin disabled and set worker_mode = 'normal'. Posting stays
-//             off until an operator turns it on deliberately with switch.mjs.
+//   --reopen  re-enable every cron job disabled by a --begin since the last reopen (matched by name or
+//             id) and set worker_mode = 'normal'. Posting stays off until an operator turns it on
+//             deliberately with switch.mjs.
 import { readFileSync } from 'node:fs';
 import { UsageError, dryRunNote, enqueuePeriodic, formatTable, isMain, pickAction, printPlan, runScript, writeAudit } from './lib-ops.mjs';
 
@@ -102,11 +104,42 @@ export function jobsToReopen(cron, recorded) {
 const describeJobs = (cron, ids) =>
   ids.map((id) => (cron ?? []).find((j) => j.jobid === id)?.jobname ?? `job ${id}`).join(', ');
 
-async function setCronActive(tx, jobid, active) {
+// Every --begin since the last --reopen, unioned (rows in id order). A second --begin finds nothing
+// active and records nothing, so reading only the latest record would strand recover_drain.
+export function recordedSinceReopen(rows) {
+  let acc = null;
+  for (const r of rows) {
+    const m = r.metadata ?? {};
+    if (m.phase === 'reopen') {
+      acc = null;
+    } else if (m.phase === 'begin') {
+      acc ??= { ids: [], names: [], begins: 0 };
+      acc.begins += 1;
+      for (const id of Array.isArray(m.cron_job_ids) ? m.cron_job_ids : []) if (!acc.ids.includes(Number(id))) acc.ids.push(Number(id));
+      for (const n of Array.isArray(m.cron_job_names) ? m.cron_job_names : []) if (!acc.names.includes(n)) acc.names.push(n);
+    }
+  }
+  return acc;
+}
+
+// cron.alter_job is the supported API (job owner or superuser). The direct update is the fallback where
+// only the table grant works; it must change exactly one row, otherwise the job was not switched (for
+// example hidden by pg_cron's row security) and the error aborts the whole transaction.
+export async function setCronActive(tx, jobid, active) {
   try {
     await tx.savepoint((sp) => sp`select cron.alter_job(${jobid}::bigint, active => ${active}::boolean)`);
-  } catch {
-    await tx`update cron.job set active = ${active}::boolean where jobid = ${jobid}::bigint`;
+    return 'alter_job';
+  } catch (first) {
+    let rows;
+    try {
+      rows = await tx`update cron.job set active = ${active}::boolean where jobid = ${jobid}::bigint returning jobid`;
+    } catch (second) {
+      throw new Error(`pg_cron job ${jobid}: cron.alter_job failed (${first.message}) and the fallback update failed (${second.message})`);
+    }
+    if (rows.length !== 1) {
+      throw new Error(`pg_cron job ${jobid}: cron.alter_job failed (${first.message}) and the fallback update changed ${rows.length} rows, not 1`);
+    }
+    return 'update';
   }
 }
 
@@ -129,14 +162,17 @@ export async function run({ values, apply, sql, requestId, say }) {
     const switchesOn = GLOBAL_SWITCHES.filter((c) => state.district[c]);
     const last = state.lastAudit;
     const restoredAt = values['restored-at'] ?? null;
-    if (state.district.worker_mode === 'quarantine') say('note: already in quarantine; --begin again writes another audit-gap row');
+    if (state.district.worker_mode === 'quarantine') {
+      say('note: already in quarantine; this writes another begin row, and --reopen restores every job disabled since the last reopen');
+    }
     printPlan(say, [
       activeJobs.length ? `disable pg_cron jobs ${describeJobs(state.cron, activeJobs)} (cron.alter_job ... active => false)` : 'pg_cron: no active job to disable',
       `set district_settings.worker_mode = quarantine (now ${state.district.worker_mode})`,
       `set district global switches off: ${GLOBAL_SWITCHES.join(', ')}${switchesOn.length ? '' : ' (already off)'}`,
-      `write audit_log runbook.audit_gap: last audit id ${last ? `${last.id} (${last.at.toISOString()})` : 'none'}, restored at ${restoredAt ?? 'now()'}`,
       `enqueue ${EXPIRY_KINDS.join(', ')} (they run after --reopen; quarantine leases only reconcile kinds)`,
-      `write audit_log runbook.restore_quarantine phase begin (request_id ${requestId})`,
+      `write ONE audit_log row runbook.restore_quarantine (phase begin, request_id ${requestId}) recording the audit gap `
+        + `(last audit id ${last ? `${last.id} at ${last.at.toISOString()}` : 'none'}, restored at ${restoredAt ?? 'now()'}), `
+        + 'the cron jobs disabled and the switches turned off',
     ]);
     if (!apply) {
       dryRunNote(say);
@@ -151,13 +187,6 @@ export async function run({ values, apply, sql, requestId, say }) {
                lost_reports_global_enabled = false, cross_school_search_global_enabled = false
          where id = 1`;
       const [{ now }] = await tx`select coalesce(${restoredAt}::timestamptz, now()) as now`;
-      await writeAudit(tx, {
-        ...audit,
-        action: 'runbook.audit_gap',
-        targetTable: 'audit_log',
-        targetId: String(last?.id ?? 0),
-        metadata: { last_audit_id: last?.id ?? null, last_audit_at: last?.at.toISOString() ?? null, restored_at: now.toISOString() },
-      });
       const ids = [];
       for (const kind of EXPIRY_KINDS) ids.push(await enqueuePeriodic(tx, kind));
       await writeAudit(tx, {
@@ -167,6 +196,10 @@ export async function run({ values, apply, sql, requestId, say }) {
         after: { worker_mode: 'quarantine' },
         metadata: {
           phase: 'begin',
+          // the audit gap (§16.5 step 4): rows between this id and the restore are lost
+          last_audit_id: last?.id ?? null,
+          last_audit_at: last?.at.toISOString() ?? null,
+          restored_at: now.toISOString(),
           cron_job_ids: activeJobs,
           cron_job_names: (state.cron ?? []).filter((j) => activeJobs.includes(j.jobid) && j.jobname).map((j) => j.jobname),
           switches_off: switchesOn,
@@ -183,12 +216,16 @@ export async function run({ values, apply, sql, requestId, say }) {
 
   // --reopen
   if (state.district.worker_mode !== 'quarantine') throw new Error('worker_mode is not quarantine; nothing to reopen');
-  const [begin] = await sql`
-    select metadata from public.audit_log
-     where action = 'runbook.restore_quarantine' and metadata->>'phase' = 'begin' order by id desc limit 1`;
-  const recorded = begin ? { ids: begin.metadata?.cron_job_ids, names: begin.metadata?.cron_job_names } : null;
+  const history = await sql`
+    select id, metadata from public.audit_log
+     where action = 'runbook.restore_quarantine'
+       and id > coalesce((select max(a.id) from public.audit_log a
+                           where a.action = 'runbook.restore_quarantine' and a.metadata->>'phase' = 'reopen'), 0)
+     order by id`;
+  const recorded = recordedSinceReopen(history);
   const toEnable = jobsToReopen(state.cron, recorded);
-  if (!recorded) say('note: no --begin record found; every inactive pg_cron job will be re-enabled');
+  if (recorded) say(`${recorded.begins} --begin record(s) since the last reopen; their disabled jobs are restored together`);
+  else say('note: no --begin record since the last reopen; every inactive pg_cron job will be re-enabled');
   printPlan(say, [
     toEnable.length ? `re-enable pg_cron jobs ${describeJobs(state.cron, toEnable)} (cron.alter_job ... active => true)` : 'pg_cron: no job to re-enable',
     'set district_settings.worker_mode = normal (queued expiry and deletion work runs on the next drain)',
@@ -207,7 +244,12 @@ export async function run({ values, apply, sql, requestId, say }) {
       action: 'runbook.restore_quarantine',
       before: { worker_mode: 'quarantine' },
       after: { worker_mode: 'normal' },
-      metadata: { phase: 'reopen', cron_job_ids: toEnable },
+      metadata: {
+        phase: 'reopen',
+        cron_job_ids: toEnable,
+        cron_job_names: (state.cron ?? []).filter((j) => toEnable.includes(j.jobid) && j.jobname).map((j) => j.jobname),
+        begin_rows: recorded?.begins ?? 0,
+      },
     });
   });
   say(`workers reopened (request_id ${requestId})`);

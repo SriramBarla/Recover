@@ -56,7 +56,8 @@ postgresql://recover_web.<ref>:<password>@<pooler-host>:6543/postgres
 postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
 ```
 
-**10. Cron.** Migration `0450_cron.sql` schedules the one-minute drain. It calls `worker_url` with `scheduler_bearer`, both read from Vault at call time (F-62). Nothing else is needed.
+**10. Cron.** Migration `0450_cron.sql` schedules the one-minute drain. It calls `worker_url` with `scheduler_bearer`, both read from Vault at call time (F-62), through the `http` extension that migration `0001` enables. Nothing else is needed.
+- **Keep pg_net disabled** in Dashboard > Database > Extensions. Its `net` schema and request queue grant PUBLIC access that cannot be revoked, so the app's login roles could make HTTP calls from the database and read queued headers. Migration `0001` drops it, and `supabase/tests/security_review.sql` fails if it comes back.
 
 ## 2. Google Cloud (staff sign-in and Vision)
 
@@ -72,7 +73,7 @@ postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
   - allowed audience: `https://vercel.com/<team slug>`
   - condition: pinned to the `recover-worker` production subject
 - Create a service account with Vision access, and allow the pool to impersonate it. No JSON key is ever created (F-92, D-19).
-- Set `GCP_WIF_AUDIENCE`, `GCP_SERVICE_ACCOUNT_EMAIL`, `GCP_PROJECT_ID`, and `VISION_MODE=google` in `recover-worker`. Until then, use `VISION_MODE=off`: items arrive unscreened and humans still review everything.
+- Set `GCP_WIF_AUDIENCE`, `GCP_SERVICE_ACCOUNT_EMAIL`, and `VISION_MODE=google` in `recover-worker`. Until then, use `VISION_MODE=off`: items arrive unscreened and humans still review everything.
 
 ## 3. Vercel (two projects, one repository)
 
@@ -82,11 +83,11 @@ postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
 | `recover-worker` | `apps/worker` | worker DB login, **S3 key**, content key, scheduler hash, OIDC pins, GCP WIF |
 
 1. **Build settings.** For each project run `vercel link` from the repo root and choose the root directory above. The framework is Next.js, the install command is `npm ci` (run at the repository root through workspaces), and the Node.js version is 22.x.
-2. **OIDC.** In Team Settings > Security > OIDC Federation, enable team issuer mode. `recover-web` calls the worker with its OIDC token, so set `WORKER_OIDC_AUDIENCE` on the web project. On the worker, set `WEB_OIDC_ISSUER`, `WEB_OIDC_AUDIENCE`, `WEB_PROJECT_ID`, and `WEB_OWNER_ID` (F-93, F-121).
+2. **OIDC.** In Team Settings > Security > OIDC Federation, enable team issuer mode. `recover-web` forwards the OIDC token Vercel gives it, so the web project needs no OIDC setting. On the worker, set `WEB_OIDC_ISSUER` (`https://oidc.vercel.com/<team-slug>`), `WEB_OIDC_AUDIENCE` (`https://vercel.com/<team-slug>`), `WEB_PROJECT_ID`, and `WEB_OWNER_ID` (F-93, F-121). Confirm the claims on the first deployment ([VERIFY] V-3).
 3. **Environment variables.** Set each project's variables from `.env.example` with `vercel env add <NAME> production`:
    - Never put `SUPABASE_S3_*` into `recover-web`.
-   - Never set `RECOVER_DEV_LOGIN` or `RECOVER_DEV_AUTH` in any Vercel environment. Both are refused on Vercel anyway.
-4. **Deployment Protection.** Enable it on `recover-worker`, and add a protection bypass for the scheduler if the chosen mode blocks `pg_net` (O-24).
+   - Never set `RECOVER_DEV_LOGIN` or `RECOVER_DEV_AUTH` in any Vercel environment. Both are refused on Vercel and in any production build anyway (a production server that finds either set logs `dev_flags_ignored` once at startup).
+4. **Deployment Protection.** Enable it on `recover-worker`, and add a protection bypass for the scheduler if the chosen mode blocks the database's drain call (O-24).
 5. **Domain.** Use the district domain on `recover-web`. `recover-worker` keeps its Vercel domain; it has no public product routes.
 
 ## 4. Smoke test
