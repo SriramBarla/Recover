@@ -84,9 +84,23 @@ async function rosterReview(sql, say, directoryFile) {
     'device blocks added after the backup are gone: re-block repeat devices as they reappear (runbook 4)',
     'media: node scripts/reconcile-orphans.mjs (dry run); pull published items whose objects are missing (§16.5 step 6)',
     'RLS and privileges: DB_URL=<restored db> npm run test:sql (§16.5 step 7)',
+    'pg_cron jobs are all still inactive (run this script without flags; a migration can reschedule them)',
     'two owners sign the checkpoint note, then: node scripts/restore-quarantine.mjs --reopen --yes (§16.5 step 8)',
   ].forEach((s) => console.log(`  [ ] ${s}`));
 }
+
+// The inactive jobs --begin disabled, matched by name (stable when a migration reschedules a job
+// under a new id) or by id; every inactive job when no --begin record exists.
+export function jobsToReopen(cron, recorded) {
+  const inactive = (cron ?? []).filter((j) => !j.active);
+  if (!recorded) return inactive.map((j) => j.jobid);
+  const names = new Set(Array.isArray(recorded.names) ? recorded.names : []);
+  const ids = new Set((Array.isArray(recorded.ids) ? recorded.ids : []).map(Number));
+  return inactive.filter((j) => (j.jobname && names.has(j.jobname)) || ids.has(j.jobid)).map((j) => j.jobid);
+}
+
+const describeJobs = (cron, ids) =>
+  ids.map((id) => (cron ?? []).find((j) => j.jobid === id)?.jobname ?? `job ${id}`).join(', ');
 
 async function setCronActive(tx, jobid, active) {
   try {
@@ -117,7 +131,7 @@ export async function run({ values, apply, sql, requestId, say }) {
     const restoredAt = values['restored-at'] ?? null;
     if (state.district.worker_mode === 'quarantine') say('note: already in quarantine; --begin again writes another audit-gap row');
     printPlan(say, [
-      activeJobs.length ? `disable pg_cron jobs ${activeJobs.join(', ')} (cron.alter_job ... active => false)` : 'pg_cron: no active job to disable',
+      activeJobs.length ? `disable pg_cron jobs ${describeJobs(state.cron, activeJobs)} (cron.alter_job ... active => false)` : 'pg_cron: no active job to disable',
       `set district_settings.worker_mode = quarantine (now ${state.district.worker_mode})`,
       `set district global switches off: ${GLOBAL_SWITCHES.join(', ')}${switchesOn.length ? '' : ' (already off)'}`,
       `write audit_log runbook.audit_gap: last audit id ${last ? `${last.id} (${last.at.toISOString()})` : 'none'}, restored at ${restoredAt ?? 'now()'}`,
@@ -151,7 +165,13 @@ export async function run({ values, apply, sql, requestId, say }) {
         action: 'runbook.restore_quarantine',
         before: { worker_mode: state.district.worker_mode },
         after: { worker_mode: 'quarantine' },
-        metadata: { phase: 'begin', cron_job_ids: activeJobs, switches_off: switchesOn, jobs_enqueued: ids.filter((x) => x !== null).length },
+        metadata: {
+          phase: 'begin',
+          cron_job_ids: activeJobs,
+          cron_job_names: (state.cron ?? []).filter((j) => activeJobs.includes(j.jobid) && j.jobname).map((j) => j.jobname),
+          switches_off: switchesOn,
+          jobs_enqueued: ids.filter((x) => x !== null).length,
+        },
       });
       return ids;
     });
@@ -166,12 +186,11 @@ export async function run({ values, apply, sql, requestId, say }) {
   const [begin] = await sql`
     select metadata from public.audit_log
      where action = 'runbook.restore_quarantine' and metadata->>'phase' = 'begin' order by id desc limit 1`;
-  const recorded = Array.isArray(begin?.metadata?.cron_job_ids) ? begin.metadata.cron_job_ids.map(Number) : null;
-  const inactive = (state.cron ?? []).filter((j) => !j.active).map((j) => j.jobid);
-  const toEnable = recorded ? inactive.filter((id) => recorded.includes(id)) : inactive;
+  const recorded = begin ? { ids: begin.metadata?.cron_job_ids, names: begin.metadata?.cron_job_names } : null;
+  const toEnable = jobsToReopen(state.cron, recorded);
   if (!recorded) say('note: no --begin record found; every inactive pg_cron job will be re-enabled');
   printPlan(say, [
-    toEnable.length ? `re-enable pg_cron jobs ${toEnable.join(', ')} (cron.alter_job ... active => true)` : 'pg_cron: no job to re-enable',
+    toEnable.length ? `re-enable pg_cron jobs ${describeJobs(state.cron, toEnable)} (cron.alter_job ... active => true)` : 'pg_cron: no job to re-enable',
     'set district_settings.worker_mode = normal (queued expiry and deletion work runs on the next drain)',
     'leave the district global switches as they are (posting stays off)',
     `write audit_log runbook.restore_quarantine phase reopen (request_id ${requestId})`,
