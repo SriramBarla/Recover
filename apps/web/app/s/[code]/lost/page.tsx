@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { LostReportForm } from '@/components/student/LostReportForm.tsx';
 import { todayIn } from '@/components/student/format.ts';
 import { metaForPage, titleFor } from '@/components/student/server.ts';
+import { Notice } from '@/components/ui/notice.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { toPublicMeta } from '@/lib/storage-url.ts';
 
 type Props = { params: Promise<{ code: string }> };
@@ -16,15 +18,19 @@ export default async function LostPage({ params }: Props) {
   const code = meta.school.code;
   return (
     <div className="container-narrow stack-lg" style={{ padding: 0 }}>
-      <h1>Report a lost item</h1>
-      <p>
-        First, <Link href={`/s/${code}/search`} prefetch={false}>search the found items</Link>. If it is not there yet, tell us what
-        you lost and we will show you matches on this browser when a matching item is posted.
-      </p>
+      <PageHeader
+        title="Report a lost item"
+        description={
+          <>
+            First, <Link href={`/s/${code}/search`} prefetch={false}>search the found items</Link>. If it is not there yet, tell us
+            what you lost and we will show you matches on this browser when a matching item is posted.
+          </>
+        }
+      />
       {meta.school.flags.lostReports ? (
         <LostReportForm meta={meta} today={todayIn(meta.school.timezone)} />
       ) : (
-        <p className="notice">Lost reports are turned off at this school. Please ask at the front office.</p>
+        <Notice tone="warning">Lost reports are turned off at this school. Please ask at the front office.</Notice>
       )}
     </div>
   );

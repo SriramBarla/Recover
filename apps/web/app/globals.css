@@ -1756,6 +1756,22 @@ button.chip-sm {
 .wizard-nav > :last-child {
   margin-left: auto;
 }
+/* Listing photos: medium variants with explicit dimensions, framed on the page background. */
+.listing-photo {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.listing-photo-empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.5rem;
+  aspect-ratio: 4 / 3;
+  color: var(--muted);
+}
 /* A public item ID to say at the office: big, monospace, and easy to copy down. */
 .id-callout {
   padding: 1rem 1.25rem;

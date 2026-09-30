@@ -4,6 +4,7 @@ import type { MyLostReport } from '@recover/shared/dto.ts';
 import { MyLostReports, type ReportView } from '@/components/student/MyLostReports.tsx';
 import { formatDay } from '@/components/student/format.ts';
 import { deviceDigest, locationNames, metaForPage, titleFor } from '@/components/student/server.ts';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { api } from '@/lib/db.ts';
 import { toPublicLostReport } from '@/lib/storage-url.ts';
 
@@ -33,8 +34,7 @@ export default async function MyLostReportsPage({ params }: Props) {
 
   return (
     <div className="container-narrow stack-lg" style={{ padding: 0 }}>
-      <h1>Your lost reports</h1>
-      <p className="hint">Reports filed from this browser. Only you and school staff can see them.</p>
+      <PageHeader title="Your lost reports" description="Reports filed from this browser. Only you and school staff can see them." />
       <MyLostReports code={code} reports={reports} locationNames={locationNames(meta)} />
     </div>
   );

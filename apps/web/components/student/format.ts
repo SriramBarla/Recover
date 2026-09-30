@@ -56,10 +56,6 @@ export function myItemStatus(i: { reviewStatus: ReviewStatus; publicationStatus:
   return { text: 'Approved. Getting the photos ready', tone: 'brand' };
 }
 
-export function badgeClass(tone: Tone): string {
-  return tone === 'neutral' ? 'badge' : `badge badge-${tone}`;
-}
-
 function format(iso: string | null | undefined, timeZone: string, opts: Intl.DateTimeFormatOptions): string {
   if (!iso) return '';
   const d = new Date(iso);

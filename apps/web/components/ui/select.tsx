@@ -50,6 +50,7 @@ export function Select({
             {...p}
             className={cx('select', className)}
             aria-describedby={describedBy(p['aria-describedby'], select['aria-describedby'])}
+            aria-invalid={p['aria-invalid'] ?? select['aria-invalid']}
           >
             {placeholder !== undefined ? <option value="">{placeholder}</option> : null}
             {options?.map((o) => (

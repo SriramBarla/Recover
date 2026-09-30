@@ -1,9 +1,22 @@
 // /s/[code]/mine: items this browser posted, with plain-language status (G-32). No moderation detail.
-import Link from 'next/link';
 import type { MyItem } from '@recover/shared/dto.ts';
-import { badgeClass, categoryLabel, formatDay, myItemStatus } from '@/components/student/format.ts';
+import { categoryLabel, formatDay, myItemStatus, type Tone } from '@/components/student/format.ts';
 import { deviceDigest, metaForPage, titleFor } from '@/components/student/server.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { LinkButton } from '@/components/ui/button.tsx';
+import { CategoryIcon } from '@/components/ui/category.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconAlert, IconCamera, IconCheck, IconChevronRight, IconClock, IconX } from '@/components/ui/icons.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { api } from '@/lib/db.ts';
+
+// Status is always an icon plus words (Appendix H), matched to the tone.
+function StatusIcon({ tone }: { tone: Tone }) {
+  if (tone === 'ok') return <IconCheck />;
+  if (tone === 'danger') return <IconAlert />;
+  if (tone === 'neutral') return <IconX />;
+  return <IconClock />;
+}
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -21,31 +34,36 @@ export default async function MyItemsPage({ params }: Props) {
 
   return (
     <div className="container-narrow stack-lg" style={{ padding: 0 }}>
-      <h1>Your posts</h1>
-      <p className="hint">Found items posted from this browser.</p>
+      <PageHeader title="Your posts" description="Found items posted from this browser." />
       {items.length === 0 ? (
-        <div className="notice stack">
-          <p>You have not posted anything from this browser.</p>
-          <p>
-            <Link className="btn btn-primary" href={`/s/${code}/found`} prefetch={false}>
+        <EmptyState
+          title="You have not posted anything from this browser."
+          icon={<IconCamera />}
+          actions={
+            <LinkButton variant="primary" href={`/s/${code}/found`} prefetch={false} icon={<IconCamera />}>
               Report something you found
-            </Link>
-          </p>
-        </div>
+            </LinkButton>
+          }
+        />
       ) : (
-        <ul className="stack" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        <ul className="item-list">
           {items.map((i) => {
             const status = myItemStatus(i);
             const visible =
               i.publicId && i.reviewStatus === 'approved' && i.publicationStatus === 'published' &&
               (i.custody === 'with_finder' || i.custody === 'at_location');
             return (
-              <li key={i.itemId} className="card stack">
+              <li key={i.itemId} className="card stack-sm">
                 <div className="spread">
-                  <strong>{categoryLabel(i.category)}</strong>
-                  <span className={badgeClass(status.tone)}>{status.text}</span>
+                  <strong className="with-icon">
+                    <CategoryIcon category={i.category} />
+                    {categoryLabel(i.category)}
+                  </strong>
+                  <Badge tone={status.tone} icon={<StatusIcon tone={status.tone} />}>
+                    {status.text}
+                  </Badge>
                 </div>
-                <p className="small muted">
+                <p className="small muted" style={{ margin: 0 }}>
                   Posted {formatDay(i.createdAt, meta.school.timezone)}
                   {i.publicId ? (
                     <>
@@ -55,9 +73,11 @@ export default async function MyItemsPage({ params }: Props) {
                   ) : null}
                 </p>
                 {visible && (
-                  <Link href={`/s/${code}/items/${i.publicId}`} prefetch={false}>
-                    View listing
-                  </Link>
+                  <p style={{ margin: 0 }}>
+                    <LinkButton size="sm" variant="ghost" href={`/s/${code}/items/${i.publicId}`} prefetch={false} iconEnd={<IconChevronRight />}>
+                      View listing
+                    </LinkButton>
+                  </p>
                 )}
               </li>
             );

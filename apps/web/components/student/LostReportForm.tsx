@@ -6,7 +6,14 @@ import { useRef, useState, type FormEvent } from 'react';
 import type { Category } from '@recover/shared/dto.ts';
 import { hasContactInfo } from '@recover/shared/unicode.ts';
 import type { PublicMeta } from '@/lib/storage-url.ts';
-import { MapPicker, type MapPin } from './MapPicker.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconCheck } from '@/components/ui/icons.tsx';
+import { MapPicker } from '@/components/ui/map-picker.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
+import { TextArea } from '@/components/ui/text-area.tsx';
+import type { MapPin } from './MapPicker.tsx';
 import { apiFetch, needsNewKey, newKey, retryHint, withRetry } from './client-api.ts';
 import { CATEGORY_LABELS, CONTACT_INFO_MESSAGE } from './format.ts';
 
@@ -64,89 +71,77 @@ export function LostReportForm({ meta, today }: { meta: PublicMeta; today: strin
   }
 
   const invalid = (f: Field) => (error?.field === f ? true : undefined);
-  const describedBy = (f: Field, hint: string) => (error?.field === f ? `${hint} lost-error` : hint);
 
   return (
     <form className="stack-lg" onSubmit={onSubmit} noValidate>
-      <p className="notice">This report is saved to this browser only. If you clear your browser data you can file it again.</p>
+      <Notice title="Saved on this browser only">This report is saved to this browser only. If you clear your browser data you can file it again.</Notice>
 
-      <div className="field">
-        <label className="label" htmlFor="lost-category">
-          What did you lose?
-        </label>
-        <select
-          id="lost-category"
-          className="select"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          required
-          aria-invalid={invalid('category')}
-          aria-describedby={error?.field === 'category' ? 'lost-error' : undefined}
-        >
-          <option value="">Choose one</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABELS[c]}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Select
+        id="lost-category"
+        label="What did you lose?"
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
+        required
+        aria-invalid={invalid('category')}
+        aria-describedby={error?.field === 'category' ? 'lost-error' : undefined}
+        placeholder="Choose one"
+        options={CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
+      />
 
-      <div className="field">
-        <label className="label" htmlFor="lost-desc">
-          Describe it
-        </label>
-        <textarea
-          id="lost-desc"
-          className="textarea"
-          maxLength={200}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Black North Face backpack with a green keychain"
-          required
-          aria-invalid={invalid('description')}
-          aria-describedby={describedBy('description', 'lost-desc-hint lost-desc-count')}
-        />
-        <p id="lost-desc-hint" className="hint">
-          Only you and school staff see this. It is used to find matches.
-        </p>
-        <p id="lost-desc-count" className="hint">
-          {description.length} of 200 characters
-        </p>
-        {hasContactInfo(description) && <p className="notice notice-warn">{CONTACT_INFO_MESSAGE}</p>}
-      </div>
+      <TextArea
+        id="lost-desc"
+        label="Describe it"
+        privateNote="Only you and staff see this"
+        hint="It is used to find matches."
+        maxLength={200}
+        rows={3}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Black North Face backpack with a green keychain"
+        required
+        aria-invalid={invalid('description')}
+        aria-describedby={error?.field === 'description' ? 'lost-error' : undefined}
+      />
+      {hasContactInfo(description) && <Notice tone="warning">{CONTACT_INFO_MESSAGE}</Notice>}
 
       {meta.map && (
-        <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="label">Where do you think you lost it? (optional)</legend>
-          <MapPicker map={meta.map} zones={meta.zones} value={pin} onChange={setPin} label="Campus map" />
+        <fieldset className="fieldset">
+          <legend>
+            Where do you think you lost it? <span className="label-optional">(optional)</span>
+          </legend>
+          <MapPicker
+            src={meta.map.url}
+            width={meta.map.width}
+            height={meta.map.height}
+            value={pin}
+            onChange={(p) => setPin(p)}
+            zones={meta.zones}
+            label="Campus map"
+            clearable
+          />
         </fieldset>
       )}
 
-      <div className="field">
-        <label className="label" htmlFor="lost-on">
-          When did you lose it? (optional)
-        </label>
-        <input
-          id="lost-on"
-          type="date"
-          className="input"
-          max={today}
-          value={lostOn}
-          onChange={(e) => setLostOn(e.target.value)}
-          aria-invalid={invalid('lostOn')}
-          aria-describedby={error?.field === 'lostOn' ? 'lost-error' : undefined}
-        />
-      </div>
+      <TextInput
+        id="lost-on"
+        type="date"
+        label="When did you lose it?"
+        optional
+        max={today}
+        value={lostOn}
+        onChange={(e) => setLostOn(e.target.value)}
+        aria-invalid={invalid('lostOn')}
+        aria-describedby={error?.field === 'lostOn' ? 'lost-error' : undefined}
+      />
 
       {error && (
-        <p id="lost-error" className="notice notice-danger" role="alert">
+        <Notice id="lost-error" tone="danger" live="assertive">
           {error.message}
-        </p>
+        </Notice>
       )}
-      <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>
-        {busy ? 'Saving...' : 'Save my report'}
-      </button>
+      <Button type="submit" variant="primary" size="lg" loading={busy} loadingText="Saving..." icon={<IconCheck />}>
+        Save my report
+      </Button>
     </form>
   );
 }
