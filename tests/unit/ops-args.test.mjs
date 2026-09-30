@@ -1,13 +1,15 @@
 // scripts/lib-ops.mjs: argument parsing with the dry-run default, DB URL resolution, the F-74 payload
-// check every runbook audit row passes, mode-600 secret files; and switch.mjs assignment parsing.
+// check every runbook audit row passes (keys and values), mode-600 secret files kept outside the
+// repository and kept when a commit landed, verify-full TLS; and switch.mjs assignment parsing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
-  LOCAL_DB_URL, UsageError, describeDb, isMain, parseEnv, parseOpsArgs, pickAction, positiveInt, privacyViolations,
-  resolveDbUrl, writeAudit, writeSecretFile,
+  LOCAL_DB_URL, UsageError, assertOutsideRepo, auditLanded, connect, describeDb, isMain, parseEnv, parseOpsArgs, pickAction,
+  positiveInt, privacyViolations, resolveDbUrl, settleOutFile, tlsFor, writeAudit, writeSecretFile,
 } from '../../scripts/lib-ops.mjs';
 import { DISTRICT_SWITCHES, SCHOOL_SWITCHES, parseAssignments } from '../../scripts/switch.mjs';
 
@@ -139,4 +141,100 @@ test('switch assignments map to the district and school columns', () => {
   assert.throws(() => parseAssignments(DISTRICT_SWITCHES, ['posting=off', 'posting=on']), /twice/);
   assert.throws(() => parseAssignments(DISTRICT_SWITCHES, ['posting']), /key=value/);
   assert.throws(() => parseAssignments(DISTRICT_SWITCHES, ['toString=on']), /unknown switch/);
+});
+
+// ---------- review fixes (items 6, 8, 9, 13) ----------
+
+test('keys are checked like values, and any unsafe key is redacted in findings', () => {
+  const pathKey = '0a0a0a0a-0000-4000-8000-000000000001/0b0b0b0b-0000-4000-8000-000000000002/raw';
+  const found = privacyViolations({
+    'someone@example.org': 1,
+    [pathKey]: true,
+    'free text as a key': 'x',
+    'a-b': 1,
+    note: 'x',
+    ok_key: { 'x@y.z': 2 },
+    ['f'.repeat(64)]: 1,
+  });
+  assert.deepEqual(found.map((f) => `${f.at} ${f.rule}`).sort(), [
+    '$.<key 1 redacted> key_at_sign',
+    '$.<key 2 redacted> key_storage_path',
+    '$.<key 3 redacted> key_free_text',
+    '$.<key 7 redacted> key_hex_digest',
+    '$.note forbidden_key',
+    '$.ok_key.<key 1 redacted> key_at_sign',
+  ]);
+  const text = JSON.stringify(found);
+  for (const leaked of ['someone@example.org', '0b0b0b0b', 'free text', 'x@y.z', 'a-b', 'ffff']) assert.ok(!text.includes(leaked), leaked);
+});
+
+test('writeAudit refuses a payload whose KEY carries data, without echoing the key', async () => {
+  const sql = async () => [];
+  sql.json = (v) => v;
+  const base = { script: 'jobs', action: 'runbook.jobs_dispose', requestId: '00000000-0000-4000-8000-000000000000', targetTable: 'jobs', targetId: '1' };
+  await assert.rejects(writeAudit(sql, { ...base, metadata: { 'someone@example.org': 1 } }), (e) => /F-74/.test(e.message) && !e.message.includes('someone'));
+  await assert.rejects(writeAudit(sql, { ...base, after: { nested: { 'a b c': 1 } } }), /key_free_text/);
+});
+
+test('secret files must be written outside the repository', () => {
+  const repo = mkdtempSync(path.join(tmpdir(), 'ops-repo-'));
+  mkdirSync(path.join(repo, 'sub'));
+  const outside = mkdtempSync(path.join(tmpdir(), 'ops-out-'));
+  assert.throws(() => assertOutsideRepo(path.join(repo, 'key.env'), repo), /inside the repository/);
+  assert.throws(() => assertOutsideRepo(path.join(repo, 'sub', 'key.env'), repo), /inside the repository/);
+  assert.equal(assertOutsideRepo(path.join(outside, 'key.env'), repo), path.join(outside, 'key.env'));
+  symlinkSync(repo, path.join(outside, 'link-into-repo'));
+  assert.throws(() => assertOutsideRepo(path.join(outside, 'link-into-repo', 'key.env'), repo), /inside the repository/);
+  assert.throws(() => assertOutsideRepo(path.join(outside, 'no-such-dir', 'key.env'), repo), /does not exist/);
+  // the real repository: scripts/ and the root itself
+  assert.throws(() => assertOutsideRepo(fileURLToPath(new URL('../../scripts/key.env', import.meta.url))), UsageError);
+  assert.throws(() => assertOutsideRepo(fileURLToPath(new URL('../../key.env', import.meta.url))), UsageError);
+});
+
+test('after a failed rotation the secret file is deleted only when nothing committed', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ops-settle-'));
+  const file = (name) => {
+    const f = path.join(dir, name);
+    writeFileSync(f, 'secret\n');
+    return f;
+  };
+  const said = [];
+  const say = (line) => said.push(line);
+  const rows = (r) => async () => r; // a fake tagged-template sql returning these rows
+  const unreachable = async () => {
+    throw new Error('connection terminated');
+  };
+  const rid = '00000000-0000-4000-8000-000000000001';
+  assert.equal(await auditLanded(rows([{ x: 1 }]), rid), true);
+  assert.equal(await auditLanded(rows([]), rid), false);
+  assert.equal(await auditLanded(unreachable, rid), null);
+  const landed = file('landed.env');
+  assert.equal(await settleOutFile(rows([{ x: 1 }]), rid, landed, say), 'kept');
+  assert.ok(existsSync(landed));
+  assert.match(said.at(-1), /WAS committed/);
+  const unknown = file('unknown.env');
+  assert.equal(await settleOutFile(unreachable, rid, unknown, say), 'kept');
+  assert.ok(existsSync(unknown));
+  assert.match(said.at(-1), /could not confirm/);
+  const rolledBack = file('rolled-back.env');
+  assert.equal(await settleOutFile(rows([]), rid, rolledBack, say), 'deleted');
+  assert.ok(!existsSync(rolledBack));
+});
+
+test('remote connections use verify-full with the CA from PGSSLROOTCERT, and warn without it', async () => {
+  assert.deepEqual(tlsFor(LOCAL_DB_URL, { PGSSLROOTCERT: '/x' }), { ssl: false, mode: 'off (local stack)' });
+  const remote = 'postgresql://postgres.abcd:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=disable';
+  const plain = tlsFor(remote, {});
+  assert.equal(plain.ssl, 'require');
+  assert.match(plain.warning, /NOT verified/);
+  const verified = tlsFor(remote, { PGSSLROOTCERT: '/etc/supabase-ca.crt' }, (f) => Buffer.from(`CA ${f}`));
+  assert.equal(verified.ssl.rejectUnauthorized, true);
+  assert.equal(String(verified.ssl.ca), 'CA /etc/supabase-ca.crt');
+  assert.equal(verified.warning, undefined);
+  assert.match(verified.mode, /^verify-full/);
+  assert.deepEqual(tlsFor(remote, { PGSSLROOTCERT: 'system' }).ssl, { rejectUnauthorized: true });
+  assert.throws(() => tlsFor(remote, { PGSSLROOTCERT: '/no/such/ca.crt' }), /ENOENT/);
+  const sql = connect(remote, 'test', verified); // no connection is opened until a query runs
+  assert.equal(sql.options.ssl, verified.ssl, 'the explicit option wins over sslmode=disable in the URL');
+  await sql.end();
 });

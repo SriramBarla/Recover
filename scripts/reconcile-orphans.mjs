@@ -278,7 +278,7 @@ export async function deleteOrphans({ batch, lookup, send, opts, say, counts, sh
     if (shouldStop()) break;
     const now = classify(o.bucket, o, await lookup(o.bucket, o.key), opts);
     if (now !== 'no_row' && now !== 'unreferenced') {
-      counts.skipped_referenced += 1;
+      counts.skipped_not_orphan += 1;
       continue;
     }
     const head = await send({ method: 'HEAD', bucket: o.bucket, key: o.key });
@@ -383,7 +383,7 @@ export async function run({ values, apply, sql, requestId, say }) {
     return 0;
   }
 
-  const counts = { deleted: 0, failed: 0, skipped_referenced: 0, skipped_changed: 0, skipped_gone: 0 };
+  const counts = { deleted: 0, failed: 0, skipped_not_orphan: 0, skipped_changed: 0, skipped_gone: 0 };
   let interrupted = false;
   let aborted = false;
   let audited = false;
@@ -423,7 +423,7 @@ export async function run({ values, apply, sql, requestId, say }) {
     } catch (e) {
       say(`ERROR: the audit row could not be written (${e.message}); record these counts by hand`);
     }
-    say(`deleted ${counts.deleted}, failed ${counts.failed}, skipped ${counts.skipped_referenced} now referenced, ${counts.skipped_changed} changed, ${counts.skipped_gone} gone${interrupted ? ' (interrupted)' : ''} (request_id ${requestId})`);
+    say(`deleted ${counts.deleted}, failed ${counts.failed}, skipped ${counts.skipped_not_orphan} no longer orphans, ${counts.skipped_changed} changed, ${counts.skipped_gone} gone${interrupted ? ' (interrupted)' : ''} (request_id ${requestId})`);
   }
   return counts.failed || interrupted || !audited ? 1 : 0;
 }
