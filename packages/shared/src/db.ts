@@ -26,24 +26,13 @@ const ARG_NAME = /^p_[a-z0-9_]+$/;
 
 export type Args = Record<string, unknown>;
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  if (v === null || typeof v !== 'object') return false;
-  const proto = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
-}
-
-// Value mapping: undefined -> null; Buffer/Uint8Array -> bytea; plain objects and arrays of plain
-// objects -> JSON text (cast to jsonb by the function signature); arrays of scalars stay arrays
-// (uuid[] / text[]); Date -> ISO string. Everything else is sent untyped and resolved by Postgres.
+// Value mapping: undefined -> null; Date -> ISO string; everything else is passed through.
+// postgres.js describes the statement, learns each parameter's type from the function signature,
+// and serializes accordingly: jsonb params get JSON.stringify exactly once (so pass plain objects
+// and arrays, never pre-serialized JSON strings), uuid[]/text[] get array literals, Buffer -> bytea.
 function toParam(v: unknown): unknown {
   if (v === undefined) return null;
   if (v instanceof Date) return v.toISOString();
-  if (v instanceof Uint8Array) return v;
-  if (isPlainObject(v)) return JSON.stringify(v);
-  if (Array.isArray(v)) {
-    if (v.some((x) => isPlainObject(x) || Array.isArray(x))) return JSON.stringify(v);
-    return v;
-  }
   return v;
 }
 
