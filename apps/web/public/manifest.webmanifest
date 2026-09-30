@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "Recover: school lost and found",
+  "short_name": "Recover",
+  "description": "See what has been found at your school, report what you lost, and post what you found.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#f7f6f2",
+  "theme_color": "#0f5c56",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

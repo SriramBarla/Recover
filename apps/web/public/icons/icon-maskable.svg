@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Recover">
+  <rect width="512" height="512" fill="#0f5c56"/>
+  <g transform="translate(256 256) scale(0.7) translate(-256 -256)">
+    <circle cx="224" cy="224" r="116" fill="none" stroke="#ffffff" stroke-width="44"/>
+    <path d="M310 310l106 106" fill="none" stroke="#ffffff" stroke-width="52" stroke-linecap="round"/>
+    <path d="M174 228l36 36 70-78" fill="none" stroke="#f08a5d" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
