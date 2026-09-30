@@ -614,10 +614,14 @@ These were agreed between agents while building and are now part of the contract
 - `system_media_ticket_redeem` also returns `itemId` and `publicPath`.
 - `system_deletion_objects` rows also carry `found`, `schoolId`, `itemId`, and `currentPath`.
 - `system_purge` kinds include `map_drafts`. That purge first rejects any draft not submitted within 7 days of creation (reason `abandoned: not submitted within 7 days`, audit action `map.abandon`), then queues `delete_map_draft` for rejected versions.
+- `system_purge` kinds also include `error_rollup`: day rows go 90 days after their UTC day (0410).
+- `system_map_get(p_map_version_id)` returns `{mapVersionId, schoolId, approvalStatus, active, draftPath, draftCanonicalPath, publicPath, width, height}`. An unknown id is `not_found`.
 - Redeeming a `map.upload` ticket schedules `canonicalize_map` 60 s later.
 
 **Rate limits**
-- The actions are `post_item`, `lost_report`, `search`, `status_poll`, and `search_all`. `search_all` has its own budget, the same size as `search`.
+- The actions are `post_item`, `lost_report`, `search`, `status_poll`, `search_all`, `high_value`, and `client_error`. `search_all` has its own budget, the same size as `search`.
+- `high_value` (`POST /api/s/[code]/events/high-value`) and `client_error` (`POST /api/client-error`) are per address only: 20 and 60 per 10 minutes. `client_error` has no school, so it takes `p_school_code` null and its counters use the `district` scope (0210).
+- `api_record_error` signatures may contain one space (`<METHOD> <route>:<Class>`), and the client-error beacon accepts only allowlisted classes and routes.
 - Counters are keyed per window (`<action>:<window>`), so the day and week post limits never share a row.
 
 **Deletion and publication rules**
@@ -633,7 +637,12 @@ These were agreed between agents while building and are now part of the contract
 - `0011_calendar_recompute.sql` recomputes open arrival deadlines for the edited school only, whenever its `school_calendar_days`, `never_arrived_school_days`, or timezone changes (G-01).
 - A recompute counts from `items.arrival_basis_at`, the completion time `/complete` stores. It only moves a deadline later, or fills one that missing coverage left NULL. It never moves one earlier.
 
-**Security review fixes**
+**Staff sign-in (web/worker security review, PR #26)**
+- The step-up sign-in (`?reauth=1`) sends `prompt=login` and `max_age=0`. The session's auth time comes from the ID token's `auth_time`, falling back to the server clock if the claim is missing ([VERIFY] V-6: confirm Google sends `auth_time` on this client). The 24-hour session limit runs from `signedInAt`.
+- Dev login and dev worker auth are refused when `NODE_ENV` is `production` as well as on Vercel.
+- The staff complete route checks the item in SQL before it calls the worker.
+
+**Security review fixes (database, PR #27)**
 - pg_net is never installed. `private.cron_drain()` calls the worker synchronously through the `http` extension, so the bearer is never stored in a table. A 5 s timeout is the normal outcome; any other failure fails the cron run with the HTTP status or the connection error.
 - `api_staff_create_item` and `api_staff_map_create_draft` claim the assertion's idempotency key, or its `request_id` when there is none, in `idempotency_keys` (principal kind `staff`, operations `item.create` and `map.create`). A replay returns the first result. The same key with a different body is `idempotency_conflict`.
 - `recover_attestation_owner` reads `private.staff_assertion_keys` (the `staff_assertion_key_*` rows) and has no grant on `vault.decrypted_secrets`.
