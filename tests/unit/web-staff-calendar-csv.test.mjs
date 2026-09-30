@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { parseCalendarCsv, summarize } from '../../apps/web/components/staff/calendar-csv.ts';
 
 test('parses a header, open and closed days, and sorts by day', () => {
-  const { rows, errors } = parseCalendarCsv('﻿day,is_open,open_at,close_at\r\n2026-10-02,true,7:45,15:30\n2026-10-01,TRUE,07:45:00,15:30\n2026-10-03,false,,\n\n');
+  const { rows, errors } = parseCalendarCsv('\uFEFFday,is_open,open_at,close_at\r\n2026-10-02,true,7:45,15:30\n2026-10-01,TRUE,07:45:00,15:30\n2026-10-03,false,,\n\n');
   assert.deepEqual(errors, []);
   assert.deepEqual(rows, [
     { day: '2026-10-01', isOpen: true, openAt: '07:45:00', closeAt: '15:30:00' },

@@ -25,7 +25,7 @@ test('textOf cleans text and maps empty optional input to null', () => {
   assert.equal(textOf(null, 'note', { max: 80, optional: true }), null);
   assert.throws(() => textOf('', 'name', { max: 20 }), { code: 'invalid_input', field: 'name' });
   assert.throws(() => textOf('x'.repeat(21), 'name', { max: 20 }), { code: 'invalid_input' });
-  assert.throws(() => textOf('bad‮ltr', 'name', { max: 20 }), { code: 'invalid_input' });
+  assert.throws(() => textOf('bad\u202Eltr', 'name', { max: 20 }), { code: 'invalid_input' });
   assert.throws(() => textOf(42, 'name', { max: 20 }), { code: 'invalid_input' });
 });
 

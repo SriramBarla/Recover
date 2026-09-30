@@ -48,10 +48,10 @@ test('uuids are lowercased in both the SQL arguments and the body', () => {
 });
 
 test('strings are NFC in both the arguments and the body', () => {
-  const decomposed = 'Café mug';
+  const decomposed = 'Cafe\u0301 mug';
   const { args, body } = prepareArgs({ p_description: decomposed });
-  assert.equal(args.p_description, 'Café mug');
-  assert.equal(body.description, 'Café mug');
+  assert.equal(args.p_description, 'Caf\u00e9 mug');
+  assert.equal(body.description, 'Caf\u00e9 mug');
 });
 
 test('floats are refused: pins, zone numbers, and timestamps travel as strings', () => {
