@@ -168,6 +168,11 @@ The order is label, hint, error, then control. `Field` hands the control its ids
 - Mark optional fields with `optional`; do not star required ones.
 - `TextArea` counts visibly on every keystroke and speaks "N characters left" after typing pauses. It never announces on page load. `maxLength` is enforced in UTF-16 units, which never exceeds the server's code-point limit.
 - `Fieldset` groups radios, checkboxes, and tiles under one legend, with the description on the fieldset.
+- Layout helpers for settings forms:
+  - `label.choice` is a checkbox or radio row with a 44px target. `.choice-grid` (as `bodyClassName`) sets several choices side by side, and `p.hint.choice-hint` lines a hint up under the choice above it (point the input's `aria-describedby` at it).
+  - `.input-number` keeps number inputs short, `bodyClassName="fieldset-row"` sets short fields side by side, and `.field-measure` caps a long text field at the reading measure.
+  - When one field in a row has a hint, add `.fields-align-end` to the grid so the inputs line up.
+  - File inputs (`TextInput type="file"`) style the picker button like a secondary button.
 
 ### 4.3 Tiles (category step)
 
@@ -215,7 +220,7 @@ Tiles are at least 100px tall, with an icon, plain words, and examples. Pass `ac
   <SubNav label="Custody views" current={view} items={[...]} />
 ```
 
-- `TopNav` sets `aria-current="page"` itself. In layouts, omit `currentPath` and each link resolves from `usePathname()`. In a page you can pass `currentPath`.
+- `TopNav` sets `aria-current="page"` itself. In layouts, omit `currentPath` and each link resolves from `usePathname()`. In a page you can pass `currentPath`. The brand link goes through `NavLink match="never"`, so the shell never renders `next/link` from a server component (see the JS budget in section 7).
 - `SchoolSwitcher` is a native `<details>` disclosure (no JavaScript). District pages pass `label="District"`.
 - Keep one `h1` per page (from `PageHeader`) and `<main id="main">` so the root layout's skip link works. In a client wizard, move focus to the new step's heading on each step change (`PageHeader focusableTitle`, or your own `tabIndex={-1}` heading).
 - `Stepper steps current` prints "Step 2 of 5 · Photos" as the accessible text. The segmented bar is hidden from assistive technology, and the current segment is half-filled.
@@ -276,6 +281,8 @@ Tiles are at least 100px tall, with an icon, plain words, and examples. Pass `ac
 - `nearestZone` mirrors `private.resolve_zone` (aspect-scaled radius).
 - **Privacy:** public listings pass `highlightZoneName` (the public DTO has only the zone name) or `highlightZoneId`, never a pin; staff review may pass the exact pin. `showZones` and `markers` serve the staff zone and location editors.
 - `width` and `height` may be null (older map versions); the picker then sizes from the loaded image.
+- **Staff editors:** `coordinateInputs` adds typed Across (%) and Down (%) fields with a "Set {pointLabel}" button, and `showCoordinates` adds the numbers to the readout. Markers are also listed for screen readers.
+- The found wizard loads the picker with `React.lazy` (it is only needed on the "where" step) and starts fetching it on the photos step. Keep new map features out of the student path when they are staff-only.
 
 ### 4.9 Photo capture
 
@@ -292,7 +299,9 @@ Tiles are at least 100px tall, with an icon, plain words, and examples. Pass `ac
 
 ### 4.10 Data: tables, lists, stats, empty and loading
 
-- `Table caption dense hideCaption` wraps your `thead` and `tbody` in a labelled, focusable scroll region, so wide tables scroll without a mouse at 320px. Cells take `className="num"` or `"actions"`, and rows take `data-selected`.
+- `Table caption dense hideCaption` wraps your `thead` and `tbody` in a labelled, focusable scroll region, so wide tables scroll without a mouse at 320px. Cells take `className="num"` or `"actions"`, and rows take `data-selected` or `aria-current="true"`.
+  - Cells wrap at word boundaries only. A table wider than the screen scrolls inside its region, and a soft shadow (`--scroll-shadow`) shows on the side that has more columns.
+  - Put several text links in one cell with `div.link-row`, and an action cell's buttons in `div.button-row`.
 - `KeyValue items` renders a two-column `dl` that stacks under 30rem.
 - `StatGrid` and `Stat label value hint tone` render KPI tiles. The `hint` says what the tone means.
 - `EmptyState title actions` is for an empty list: what it means and what to do next.
@@ -302,7 +311,7 @@ Tiles are at least 100px tall, with an icon, plain words, and examples. Pass `ac
 
 ### 4.11 Icons
 
-57 hand-drawn outline icons on a 24px grid with 1.75px round strokes, using `currentColor`:
+58 hand-drawn outline icons on a 24px grid with 1.75px round strokes, using `currentColor`:
 
 - **Categories:** bag, bottle, book, clothing, electronics, jewelry, sports, other, phone, wallet, keys, id, medication.
 - **Actions and objects:** search, camera, map-pin, check, x, alert, clock, building, user, shield, and more.
@@ -347,4 +356,8 @@ Every class in `globals.css` stays supported, restyled with the tokens. They are
 
 - Add tokens, not hex values. Add a dark value for every color token in both dark blocks of `globals.css` (the media query and `[data-theme='dark']`), and check the contrast pairs in section 3.2.
 - A new component goes in `components/ui/`: typed props, server-safe unless it needs state, and a specimen in `/styleguide` in both panels.
+- **Student JS budget.** Every student route stays under 150 KB of gzipped first-load JS. React and the Next.js runtime already take about 128 KB, so every client import on a student page counts. Measure the scripts a production build actually sends for the page, not the source size.
+  - Do not render `next/link` from a server component that appears on every page, such as a not-found boundary or the shell. Its client reference can pull another page's chunks into every route. Use `<a className={buttonClass(...)}>` there, or a client component that is already in the shell (`NavLink`).
+  - Load step-specific tools with `React.lazy` and `Suspense`, with a skeleton fallback and a notice if loading fails. The found wizard does this for the map and the photo tools.
+  - `.with-icon` text wraps beside its icon, so long school and location names never widen the page at 320px.
 - Verify with a typecheck, then `/styleguide` in light, dark, 360px, and 320px (no sideways scroll), then keyboard-only use of any interactive change.

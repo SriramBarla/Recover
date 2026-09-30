@@ -4,7 +4,7 @@
 // draft (Idempotency-Key kept for retries), PUTs each JPEG to its presigned URL with 3 retries and
 // backoff, then completes. A failed send resumes: the same key replays the same draft with fresh upload
 // URLs, and only photos that did not upload are sent again.
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ComponentType } from 'react';
 import { HIGH_VALUE_CATEGORIES, STUDENT_CATEGORIES, type Category, type Completed, type UploadSpec } from '@recover/shared/dto.ts';
 import { hasContactInfo } from '@recover/shared/unicode.ts';
 import type { PublicMeta } from '@/lib/storage-url.ts';
@@ -12,17 +12,45 @@ import { Button, LinkButton } from '@/components/ui/button.tsx';
 import { CATEGORY_HINT, CategoryIcon } from '@/components/ui/category.tsx';
 import { TextInput } from '@/components/ui/field.tsx';
 import { IconArrowLeft, IconArrowRight, IconBuilding, IconCheck, IconHome, IconRefresh, IconTag } from '@/components/ui/icons.tsx';
-import { MapPicker } from '@/components/ui/map-picker.tsx';
+import type { MapPickerProps } from '@/components/ui/map-picker.tsx';
 import { Notice } from '@/components/ui/notice.tsx';
 import { Select } from '@/components/ui/select.tsx';
 import { Stepper } from '@/components/ui/stepper.tsx';
 import { TextArea } from '@/components/ui/text-area.tsx';
 import { TileButton } from '@/components/ui/tile.tsx';
 import { nearestById, type MapPin } from './MapPicker.tsx';
-import { PhotoSlots } from './PhotoSlots.tsx';
+import type { PhotoSlots as PhotoSlotsComponent } from './PhotoSlots.tsx';
 import { apiFetch, needsNewKey, newKey, reportClientError, retryHint, withRetry, type ApiError } from './client-api.ts';
 import { CATEGORY_LABELS, CONTACT_INFO_MESSAGE, categoryLabel, formatDateTime } from './format.ts';
 import type { Photo } from './photo.ts';
+
+// The campus map loads on demand (student route JS budget, §18): only the "where" step needs it,
+// and the photos step starts fetching it so it is ready in time. If it cannot load (offline), the
+// step says so and the room and drop-off fields still work.
+const loadMapPicker = () => import('@/components/ui/map-picker.tsx');
+function MapUnavailable(_: MapPickerProps) {
+  return <Notice tone="warning">The map could not load. Use the boxes below to say where you found it.</Notice>;
+}
+const MapPicker = lazy<ComponentType<MapPickerProps>>(() =>
+  loadMapPicker().then(
+    (m) => ({ default: m.MapPicker }),
+    () => ({ default: MapUnavailable }),
+  ),
+);
+
+// The photo tools (capture, JPEG re-encoding) load right after the wizard is interactive, off the
+// first-load path; the category step comes first, so they are ready by the photos step.
+type PhotoSlotsProps = ComponentProps<typeof PhotoSlotsComponent>;
+const loadPhotoSlots = () => import('./PhotoSlots.tsx');
+function PhotosUnavailable(_: PhotoSlotsProps) {
+  return <Notice tone="warning">The photo tools could not load. Check your connection, then reload this page.</Notice>;
+}
+const PhotoSlots = lazy<ComponentType<PhotoSlotsProps>>(() =>
+  loadPhotoSlots().then(
+    (m) => ({ default: m.PhotoSlots }),
+    () => ({ default: PhotosUnavailable }),
+  ),
+);
 
 type Step = 'category' | 'highvalue' | 'photos' | 'where' | 'describe' | 'submit' | 'done';
 
@@ -146,6 +174,13 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
   }, [step]);
 
   const dropoff = locations.find((l) => l.id === dropoffId) ?? office;
+  const hasMap = meta.map !== null;
+  useEffect(() => {
+    loadPhotoSlots().catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (step === 'photos' && hasMap) loadMapPicker().catch(() => undefined);
+  }, [step, hasMap]);
 
   function go(next: Step) {
     setStepError(null);
@@ -353,7 +388,9 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
 
         {step === 'photos' && (
           <div className="stack">
-            <PhotoSlots photos={photos} onChange={onPhotos} itemLabel={categoryLabel(category)} />
+            <Suspense fallback={<span aria-hidden="true" className="skeleton" style={{ height: '9rem', borderRadius: 'var(--radius)' }} />}>
+              <PhotoSlots photos={photos} onChange={onPhotos} itemLabel={categoryLabel(category)} />
+            </Suspense>
             <p className="hint">If your camera does not open, take the item to the front office instead.</p>
             <StepNav
               onBack={() => go('category')}
@@ -365,17 +402,19 @@ export function FoundWizard({ meta, src }: { meta: PublicMeta; src: string | nul
         {step === 'where' && (
           <div className="stack-lg">
             {meta.map ? (
-              <MapPicker
-                src={meta.map.url}
-                width={meta.map.width}
-                height={meta.map.height}
-                value={pin}
-                onChange={(p) => onPin(p)}
-                zones={meta.zones}
-                label="Campus map"
-                clearable
-                priority
-              />
+              <Suspense fallback={<span aria-hidden="true" className="skeleton" style={{ aspectRatio: `${meta.map.width} / ${meta.map.height}`, borderRadius: 'var(--radius)' }} />}>
+                <MapPicker
+                  src={meta.map.url}
+                  width={meta.map.width}
+                  height={meta.map.height}
+                  value={pin}
+                  onChange={(p) => onPin(p)}
+                  zones={meta.zones}
+                  label="Campus map"
+                  clearable
+                  priority
+                />
+              </Suspense>
             ) : (
               <Notice>This school does not have a map yet. Use the box below to say where you found it.</Notice>
             )}

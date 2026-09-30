@@ -1,5 +1,6 @@
 // Site-wide 404 in our own markup: Next's built-in 404 uses inline styles the nonce CSP blocks.
-import { LinkButton } from '@/components/ui/button.tsx';
+// A plain anchor, not next/link: this boundary rides along in every page's payload (JS budget).
+import { buttonClass } from '@/components/ui/button.tsx';
 import { IconHome } from '@/components/ui/icons.tsx';
 import { Logo } from '@/components/ui/logo.tsx';
 
@@ -10,9 +11,10 @@ export default function NotFound() {
       <h1>Page not found</h1>
       <p className="muted">This page does not exist, or the item is no longer listed.</p>
       <p>
-        <LinkButton variant="primary" href="/" icon={<IconHome />}>
+        <a className={buttonClass({ variant: 'primary' })} href="/">
+          <IconHome />
           Go to Recover
-        </LinkButton>
+        </a>
       </p>
     </main>
   );

@@ -48,11 +48,11 @@ export function TopNav({ homeHref, brandContext, context, items, currentPath, na
     <header className={cx('topbar', className)}>
       <div className="container">
         <div className="topbar-start">
-          <Link className="brand" href={homeHref} prefetch={prefetch}>
+          <NavLink className="brand" href={homeHref} prefetch={prefetch} match="never">
             <LogoMark />
             <span className="brand-name">Recover</span>
             {brandContext ? <span className="brand-context">{brandContext}</span> : null}
-          </Link>
+          </NavLink>
           {context}
         </div>
         {end ? <div className="topbar-end">{end}</div> : null}
