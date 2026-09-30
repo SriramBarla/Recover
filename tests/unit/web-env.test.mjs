@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { devLoginEnabled, devWorkerAuthEnabled, ignoredDevFlags } from '../../apps/web/lib/env.ts';
 import { register } from '../../apps/web/instrumentation.ts';
+import { reportIgnoredDevFlags } from '../../apps/web/lib/startup.ts';
 
 function withEnv(vars, fn) {
   const saved = {};
@@ -82,7 +83,7 @@ test('Vercel refuses both, and only the exact value 1 enables a switch', () => {
 
 test('startup logs one warning naming the ignored switches, never their values', () => {
   const secretish = 'value-that-must-not-appear';
-  const lines = stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: secretish }, () => register()));
+  const lines = stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: secretish }, () => reportIgnoredDevFlags()));
   assert.equal(lines.length, 1);
   const entry = JSON.parse(lines[0]);
   assert.equal(entry.level, 'warn');
@@ -90,11 +91,40 @@ test('startup logs one warning naming the ignored switches, never their values',
   assert.deepEqual(entry.flags, ['RECOVER_DEV_LOGIN', 'RECOVER_DEV_AUTH']);
   assert.ok(!lines[0].includes(secretish));
 
-  assert.deepEqual(stderrLines(() => withEnv(DEV, () => register())), [], 'next dev: nothing to report');
+  assert.deepEqual(stderrLines(() => withEnv(DEV, () => reportIgnoredDevFlags())), [], 'next dev: nothing to report');
   assert.deepEqual(
-    stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: undefined, RECOVER_DEV_AUTH: undefined }, () => register())),
+    stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', RECOVER_DEV_LOGIN: undefined, RECOVER_DEV_AUTH: undefined }, () => reportIgnoredDevFlags())),
     [],
     'a clean production environment is quiet',
   );
-  assert.deepEqual(stderrLines(() => withEnv({ ...DEV, NODE_ENV: 'production', NEXT_RUNTIME: 'edge' }, () => register())), []);
+});
+
+test('register() runs the startup check on the Node.js runtime only', async () => {
+  const run = async (vars) => {
+    const saved = {};
+    for (const k of Object.keys(vars)) saved[k] = process.env[k];
+    for (const [k, v] of Object.entries(vars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    const lines = [];
+    const write = process.stderr.write;
+    process.stderr.write = (chunk) => {
+      lines.push(String(chunk).trim());
+      return true;
+    };
+    try {
+      await register();
+    } finally {
+      process.stderr.write = write;
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    return lines;
+  };
+  const production = { ...DEV, NODE_ENV: 'production' };
+  assert.equal((await run(production)).length, 1, 'Node.js: the ignored switches are reported once');
+  assert.deepEqual(await run({ ...production, NEXT_RUNTIME: 'edge' }), [], 'Edge: nothing is imported or logged');
 });
