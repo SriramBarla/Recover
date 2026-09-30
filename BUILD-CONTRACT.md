@@ -539,7 +539,6 @@ The web helper `apps/web/lib/worker.ts` adds the right header.
 | `DEVICE_KEY_V1`, `IP_KEY`, `SEARCH_KEY` | base64url 32-byte keys |
 | `WORKER_URL` | where the worker runs |
 | `WORKER_DEV_SECRET`, `RECOVER_DEV_AUTH=1` | dev-only worker authentication |
-| `WORKER_OIDC_AUDIENCE` | production only |
 | `STORAGE_PUBLIC_URL` | public object base URL |
 | `S3_ORIGIN` | for CSP `connect-src` |
 | `REVALIDATE_SECRET_SHA256`, `READY_SECRET_SHA256` | internal endpoint secrets (hashes) |
@@ -555,9 +554,10 @@ The web helper `apps/web/lib/worker.ts` adds the right header.
 | `CONTENT_KEY` | fingerprint HMAC key |
 | `SCHEDULER_BEARER_SHA256` | scheduler bearer hash |
 | `WORKER_DEV_SECRET`, `RECOVER_DEV_AUTH=1` | dev-only web authentication |
-| `WEB_OIDC_ISSUER`, `WEB_OIDC_AUDIENCE`, `WEB_PROJECT_ID`, `WEB_OWNER_ID` | production OIDC pins |
+| `WEB_OIDC_ISSUER`, `WEB_OIDC_AUDIENCE`, `WEB_PROJECT_ID`, `WEB_OWNER_ID` | production OIDC pins for recover-web's Vercel token (`https://oidc.vercel.com/<team-slug>`, `https://vercel.com/<team-slug>`) |
 | `VISION_MODE` | `mock`, `google`, or `off` |
-| `GCP_WIF_AUDIENCE`, `GCP_SERVICE_ACCOUNT_EMAIL`, `GCP_PROJECT_ID` | Google identity federation |
+| `VISION_MOCK_FLAG=1` | tests only: mock screening reports text on every image |
+| `GCP_WIF_AUDIENCE`, `GCP_SERVICE_ACCOUNT_EMAIL` | Google identity federation |
 | `WEB_URL`, `REVALIDATE_SECRET` | for cache revalidation calls |
 
 `scripts/dev-env.mjs` writes both `.env.local` files with fresh random keys and the local `supabase status` values.
