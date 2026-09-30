@@ -4,6 +4,23 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RejectReason, StaffItemRow } from '@recover/shared/dto.ts';
 import type { StaffMeta } from '../../lib/staff.ts';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import {
+  IconBuilding,
+  IconCheck,
+  IconGlobe,
+  IconImage,
+  IconInbox,
+  IconPencil,
+  IconShield,
+  IconTransfer,
+  IconTrash,
+  IconX,
+} from '@/components/ui/icons.tsx';
+import { Kbd } from '@/components/ui/kbd.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
 import { ActionError } from './ActionError.tsx';
 import { ApiError, staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
@@ -84,6 +101,7 @@ export function ItemActions({ code, item, can, meta }: Props) {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || busy || panel) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (t?.closest('dialog')) return; // a confirm dialog is open: the page behind it is inert
       const k = e.key.toLowerCase();
       if (k === 'a') {
         e.preventDefault();
@@ -105,17 +123,26 @@ export function ItemActions({ code, item, can, meta }: Props) {
   if (can.approve && pending) {
     sections.push(
       <section key="review" className="stack" aria-labelledby="act-review">
-        <h3 id="act-review">Review</h3>
-        <div className="row">
-          <button type="button" className="btn btn-primary" aria-keyshortcuts="A" disabled={busy} onClick={() => void safely(() => act(`${base}/approve`, { rowVersion: rv, edits: null }, 'Approved.'))}>
-            Approve
-          </button>
-          <button type="button" className="btn" aria-keyshortcuts="E" disabled={busy} onClick={() => setPanel('approve-edit')}>
-            Approve with edits
-          </button>
-          <button type="button" className="btn btn-danger" aria-keyshortcuts="R" disabled={busy} onClick={() => setPanel('reject')}>
-            Reject
-          </button>
+        <h3 id="act-review" className="with-icon">
+          <IconInbox />
+          Review
+        </h3>
+        <div className="button-row">
+          <Button
+            variant="primary"
+            aria-keyshortcuts="A"
+            disabled={busy}
+            icon={<IconCheck />}
+            onClick={() => void safely(() => act(`${base}/approve`, { rowVersion: rv, edits: null }, 'Approved.'))}
+          >
+            Approve <Kbd aria-hidden="true">A</Kbd>
+          </Button>
+          <Button aria-keyshortcuts="E" disabled={busy} icon={<IconPencil />} onClick={() => setPanel('approve-edit')}>
+            Approve with edits <Kbd aria-hidden="true">E</Kbd>
+          </Button>
+          <Button variant="danger-outline" aria-keyshortcuts="R" disabled={busy} icon={<IconX />} onClick={() => setPanel('reject')}>
+            Reject <Kbd aria-hidden="true">R</Kbd>
+          </Button>
         </div>
         {panel === 'approve-edit' ? (
           <EditForm
@@ -137,54 +164,48 @@ export function ItemActions({ code, item, can, meta }: Props) {
   if (canReceive || (can.transfer && atLocation) || (can.claim && atLocation) || (can.dispose && atLocation)) {
     sections.push(
       <section key="custody" className="stack" aria-labelledby="act-custody">
-        <h3 id="act-custody">Custody</h3>
+        <h3 id="act-custody" className="with-icon">
+          <IconBuilding />
+          Custody
+        </h3>
         {canReceive ? (
-          <div className="row">
-            <label className="field" style={{ minWidth: '14rem' }}>
-              <span className="label">{item.custody === 'expired_never_arrived' ? 'Late check-in at' : 'Check in at'}</span>
-              <select className="select" value={receiveAt} onChange={(e) => setReceiveAt(e.target.value)}>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ alignSelf: 'flex-end' }}
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <Select
+              id={`receive-${item.id}`}
+              label={item.custody === 'expired_never_arrived' ? 'Late check-in at' : 'Check in at'}
+              fieldClassName="inline-field"
+              value={receiveAt}
+              onChange={(e) => setReceiveAt(e.target.value)}
+              options={locations.map((l) => ({ value: l.id, label: l.name }))}
+            />
+            <Button
+              variant="primary"
               disabled={busy || !receiveAt}
+              icon={<IconCheck />}
               onClick={() => void safely(() => act(`${base}/receive`, { rowVersion: rv, locationId: receiveAt }, 'Checked in.'))}
             >
               Check in
-            </button>
+            </Button>
             {item.custody === 'expired_never_arrived' ? <p className="hint">Late check-in is allowed within the school's grace window after the deadline passed.</p> : null}
           </div>
         ) : null}
         {can.transfer && atLocation ? (
-          <div className="row">
-            <label className="field" style={{ minWidth: '14rem' }}>
-              <span className="label">Move to</span>
-              <select className="select" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
-                {locations
-                  .filter((l) => l.id !== item.currentLocationId)
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn"
-              style={{ alignSelf: 'flex-end' }}
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <Select
+              id={`transfer-${item.id}`}
+              label="Move to"
+              fieldClassName="inline-field"
+              value={transferTo}
+              onChange={(e) => setTransferTo(e.target.value)}
+              options={locations.filter((l) => l.id !== item.currentLocationId).map((l) => ({ value: l.id, label: l.name }))}
+            />
+            <Button
               disabled={busy || !transferTo}
+              icon={<IconTransfer />}
               onClick={() => void safely(() => act(`${base}/transfer`, { rowVersion: rv, locationId: transferTo }, 'Transferred.'))}
             >
               Transfer
-            </button>
+            </Button>
           </div>
         ) : null}
         <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -204,12 +225,12 @@ export function ItemActions({ code, item, can, meta }: Props) {
               danger
               onConfirm={() => act(`${base}/dispose`, { rowVersion: rv, disposition }, 'Recorded.')}
             >
-              <fieldset className="row" style={{ border: 0, padding: 0, margin: 0 }}>
-                <legend className="label">What happened</legend>
+              <fieldset className="fieldset">
+                <legend>What happened</legend>
                 {DISPOSITIONS.map((d) => (
-                  <label key={d} className="row small">
+                  <label key={d} className="choice">
                     <input type="radio" name={`disp-${item.id}`} value={d} checked={disposition === d} onChange={() => setDisposition(d)} />
-                    {d === 'donated' ? 'Donated' : 'Disposed of'}
+                    <span>{d === 'donated' ? 'Donated' : 'Disposed of'}</span>
                   </label>
                 ))}
               </fieldset>
@@ -224,7 +245,10 @@ export function ItemActions({ code, item, can, meta }: Props) {
   if ((can.pull && item.publicationStatus === 'published') || (can.confirmPublish && held) || (can.edit && item.reviewStatus === 'approved' && !TERMINAL.has(item.custody))) {
     sections.push(
       <section key="publication" className="stack" aria-labelledby="act-pub">
-        <h3 id="act-pub">Listing</h3>
+        <h3 id="act-pub" className="with-icon">
+          <IconGlobe />
+          Listing
+        </h3>
         <div className="row" style={{ alignItems: 'flex-start' }}>
           {can.confirmPublish && held ? (
             <ConfirmButton
@@ -235,9 +259,9 @@ export function ItemActions({ code, item, can, meta }: Props) {
             />
           ) : null}
           {can.edit && item.reviewStatus === 'approved' && !TERMINAL.has(item.custody) ? (
-            <button type="button" className="btn" onClick={() => setPanel(panel === 'edit' ? null : 'edit')} aria-expanded={panel === 'edit'}>
+            <Button onClick={() => setPanel(panel === 'edit' ? null : 'edit')} aria-expanded={panel === 'edit'} icon={<IconPencil />}>
               Edit details
-            </button>
+            </Button>
           ) : null}
           {can.pull && item.publicationStatus === 'published' ? (
             <ConfirmButton
@@ -248,19 +272,16 @@ export function ItemActions({ code, item, can, meta }: Props) {
               confirmDisabled={!pullReason}
               onConfirm={() => act(`${base}/pull`, { rowVersion: rv, reason: pullReason }, 'Pulled.')}
             >
-              <label className="field">
-                <span className="label">Reason</span>
-                <select className="select" value={pullReason} onChange={(e) => setPullReason(e.target.value as (typeof PULL_REASONS)[number])}>
-                  <option value="" disabled>
-                    Choose a reason
+              <Select id={`pull-${item.id}`} label="Reason" value={pullReason} onChange={(e) => setPullReason(e.target.value as (typeof PULL_REASONS)[number])}>
+                <option value="" disabled>
+                  Choose a reason
+                </option>
+                {PULL_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {PULL_REASON_LABELS[r]}
                   </option>
-                  {PULL_REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {PULL_REASON_LABELS[r]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                ))}
+              </Select>
             </ConfirmButton>
           ) : null}
         </div>
@@ -287,7 +308,10 @@ export function ItemActions({ code, item, can, meta }: Props) {
   if (can.dropPhoto && photos.length > 0 && !TERMINAL.has(item.custody)) {
     sections.push(
       <section key="photos" className="stack" aria-labelledby="act-photos">
-        <h3 id="act-photos">Photos</h3>
+        <h3 id="act-photos" className="with-icon">
+          <IconImage />
+          Photos
+        </h3>
         <p className="hint">Drop a photo that failed processing or should not be published. Dropping cannot be undone.</p>
         <div className="row" style={{ alignItems: 'flex-start' }}>
           {photos.map((p) => (
@@ -308,7 +332,10 @@ export function ItemActions({ code, item, can, meta }: Props) {
   if (can.block && item.postedByKind === 'student') {
     sections.push(
       <section key="device" className="stack" aria-labelledby="act-device">
-        <h3 id="act-device">Posting device</h3>
+        <h3 id="act-device" className="with-icon">
+          <IconShield />
+          Posting device
+        </h3>
         <p className="hint">Blocks posting from the browser that submitted this item. Recover never shows who that is.</p>
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <ConfirmButton
@@ -319,24 +346,27 @@ export function ItemActions({ code, item, can, meta }: Props) {
             confirmDisabled={!blockReason}
             onConfirm={() => act(`${base}/block-device`, { days: blockDays, reason: blockReason }, 'Device blocked.')}
           >
-            <div className="row">
-              <label className="field">
-                <span className="label">Days</span>
-                <input className="input" type="number" min={1} max={90} value={blockDays} onChange={(e) => setBlockDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))} style={{ width: '6rem' }} />
-              </label>
-              <label className="field">
-                <span className="label">Reason</span>
-                <select className="select" value={blockReason} onChange={(e) => setBlockReason(e.target.value as (typeof BLOCK_REASONS)[number])}>
-                  <option value="" disabled>
-                    Choose a reason
+            <div className="row" style={{ alignItems: 'flex-end' }}>
+              <TextInput
+                id={`block-days-${item.id}`}
+                label="Days"
+                type="number"
+                min={1}
+                max={90}
+                value={blockDays}
+                onChange={(e) => setBlockDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
+                style={{ width: '6rem' }}
+              />
+              <Select id={`block-reason-${item.id}`} label="Reason" value={blockReason} onChange={(e) => setBlockReason(e.target.value as (typeof BLOCK_REASONS)[number])}>
+                <option value="" disabled>
+                  Choose a reason
+                </option>
+                {BLOCK_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {BLOCK_REASON_LABELS[r]}
                   </option>
-                  {BLOCK_REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {BLOCK_REASON_LABELS[r]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                ))}
+              </Select>
             </div>
           </ConfirmButton>
           <ConfirmButton label="Unblock device" prompt="Allow this device to post again?" confirmLabel="Unblock" onConfirm={() => act(`${base}/unblock-device`, {}, 'Device unblocked.')} />
@@ -348,7 +378,10 @@ export function ItemActions({ code, item, can, meta }: Props) {
   if (can.del && item.postedByKind !== 'student') {
     sections.push(
       <section key="delete" className="stack" aria-labelledby="act-delete">
-        <h3 id="act-delete">Delete</h3>
+        <h3 id="act-delete" className="with-icon">
+          <IconTrash />
+          Delete
+        </h3>
         <p className="hint">For staff posts made by mistake. The item is soft-deleted, audited, and its media deleted. Needs a recent sign-in.</p>
         <ConfirmButton
           label="Delete item"
@@ -358,31 +391,28 @@ export function ItemActions({ code, item, can, meta }: Props) {
           confirmDisabled={!deleteReason}
           onConfirm={() => act(base, { rowVersion: rv, reason: deleteReason }, 'Deleted.', 'DELETE')}
         >
-          <label className="field">
-            <span className="label">Reason</span>
-            <select className="select" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value as (typeof DELETE_REASONS)[number])}>
-              <option value="" disabled>
-                Choose a reason
+          <Select id={`delete-reason-${item.id}`} label="Reason" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value as (typeof DELETE_REASONS)[number])}>
+            <option value="" disabled>
+              Choose a reason
+            </option>
+            {DELETE_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {DELETE_REASON_LABELS[r]}
               </option>
-              {DELETE_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {DELETE_REASON_LABELS[r]}
-                </option>
-              ))}
-            </select>
-          </label>
+            ))}
+          </Select>
         </ConfirmButton>
       </section>,
     );
   }
 
   return (
-    <div className="card stack-lg">
+    <div className="card card-pad-lg stack-lg item-actions">
       <h2>Actions</h2>
       <p className="visually-hidden" aria-live="polite" role="status">
         {notice}
       </p>
-      {notice ? <div className="notice notice-ok">{notice}</div> : null}
+      {notice ? <Notice tone="success">{notice}</Notice> : null}
       {sections.length > 0 ? sections : <p className="muted">No actions are available for your role in this state.</p>}
       <ActionError error={error} />
     </div>

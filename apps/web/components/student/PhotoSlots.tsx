@@ -1,8 +1,17 @@
 'use client';
-// Photo step (§5.1 step 3): three slots, each with retake and remove. Capture uses a native file input
-// (capture="environment" is UX friction only, §13.1); every image is re-encoded to JPEG before upload.
-import { useRef, useState, type ChangeEvent } from 'react';
+// Photo step (§5.1 step 3): up to three photos, each with retake and remove, shown with the design
+// system's PhotoCapture. Capture uses a native file input (capture="environment" is UX friction only,
+// §13.1); every image is re-encoded to JPEG before it enters state, and photos stay packed to the
+// front so upload positions are always 0..n-1.
+import { useState } from 'react';
+import { PhotoCapture } from '@/components/ui/photo-capture.tsx';
 import { PhotoError, toJpeg, type Photo } from './photo.ts';
+
+const MAX = 3;
+
+function packed(list: Photo[]): (Photo | null)[] {
+  return Array.from({ length: MAX }, (_, i) => list[i] ?? null);
+}
 
 export function PhotoSlots({
   photos,
@@ -13,95 +22,90 @@ export function PhotoSlots({
   onChange: (next: (Photo | null)[]) => void;
   itemLabel: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const target = useRef(0);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const firstEmpty = photos.findIndex((p) => p === null);
+  const list = photos.filter((p): p is Photo => p !== null);
 
-  function pick(slot: number) {
-    target.current = slot;
-    setError(null);
-    inputRef.current?.click();
-  }
-
-  async function onFile(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // choosing the same file again must still fire change
-    if (!file) return;
-    const slot = target.current;
-    setBusy(slot);
-    setStatus(`Preparing photo ${slot + 1}.`);
+  async function convert(file: File): Promise<Photo | null> {
     try {
-      const photo = await toJpeg(file);
-      const next = [...photos];
-      const old = next[slot];
-      if (old) URL.revokeObjectURL(old.url);
-      next[slot] = photo;
-      onChange(next);
-      setStatus(`Photo ${slot + 1} added.`);
+      return await toJpeg(file);
     } catch (err) {
-      setStatus('');
       setError(
         err instanceof PhotoError && err.reason === 'too_large'
           ? 'That photo is too large. Please take it again with the camera.'
           : 'That photo could not be read. Please take a new photo with the camera.',
       );
-    } finally {
-      setBusy(null);
+      return null;
     }
   }
 
-  function remove(slot: number) {
-    const old = photos[slot];
+  async function add(files: File[]) {
+    setError(null);
+    setBusy(true);
+    const next = [...list];
+    for (const file of files) {
+      if (next.length >= MAX) break;
+      setStatus(`Preparing photo ${next.length + 1}.`);
+      const photo = await convert(file);
+      if (photo) next.push(photo);
+    }
+    setBusy(false);
+    if (next.length > list.length) {
+      onChange(packed(next));
+      setStatus(`Photo ${next.length} added.`);
+    } else {
+      setStatus('');
+    }
+  }
+
+  async function replace(slot: number, file: File) {
+    setError(null);
+    setBusy(true);
+    setStatus(`Preparing photo ${slot + 1}.`);
+    const photo = await convert(file);
+    setBusy(false);
+    if (!photo) {
+      setStatus('');
+      return;
+    }
+    const next = [...list];
+    const old = next[slot];
     if (old) URL.revokeObjectURL(old.url);
-    // Keep photos packed to the front so upload positions are always 0..n-1.
-    const packed = photos.filter((p, i): p is Photo => p !== null && i !== slot);
-    onChange([packed[0] ?? null, packed[1] ?? null, packed[2] ?? null]);
+    next[slot] = photo;
+    onChange(packed(next));
+    setStatus(`Photo ${slot + 1} added.`);
+  }
+
+  function remove(slot: number) {
+    const old = list[slot];
+    if (old) URL.revokeObjectURL(old.url);
+    onChange(packed(list.filter((_, i) => i !== slot)));
     setStatus(`Photo ${slot + 1} removed.`);
   }
 
   return (
-    <div className="stack">
-      <ul className="photo-slots" aria-label="Photos" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {photos.map((p, i) => (
-          <li key={i} className="stack">
-            <div className="photo-slot">
-              {p ? (
-                <img src={p.url} alt={`Photo ${i + 1} of the ${itemLabel.toLowerCase()}`} />
-              ) : (
-                <span className="small muted" style={{ padding: '0.25rem', textAlign: 'center' }}>
-                  {busy === i ? 'Preparing...' : `Photo ${i + 1}${i === 0 ? '' : ' (optional)'}`}
-                </span>
-              )}
-            </div>
-            {p ? (
-              <>
-                <button type="button" className="btn btn-block" onClick={() => pick(i)} disabled={busy !== null} aria-label={`Retake photo ${i + 1}`}>
-                  Retake
-                </button>
-                <button type="button" className="btn btn-ghost btn-block" onClick={() => remove(i)} disabled={busy !== null} aria-label={`Remove photo ${i + 1}`}>
-                  Remove
-                </button>
-              </>
-            ) : i === firstEmpty ? (
-              <button type="button" className="btn btn-primary btn-block" onClick={() => pick(i)} disabled={busy !== null}>
-                {i === 0 ? 'Take photo' : 'Add photo'}
-              </button>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
-      <p className="small" aria-live="polite">
+    <div className="stack-sm">
+      <PhotoCapture
+        photos={list.map((p) => ({ key: p.url, previewUrl: p.url }))}
+        onAdd={(files) => void add(files)}
+        onReplace={(slot, file) => void replace(slot, file)}
+        onRemove={remove}
+        max={MAX}
+        disabled={busy}
+        announce={false}
+        label={`Photos of the ${itemLabel.toLowerCase()}`}
+        hint="Take 1 to 3 clear photos. Keep faces, names and ID numbers out of the picture."
+        error={error}
+      />
+      <p className="small muted" aria-live="polite">
         {status}
       </p>
-      {error && (
-        <p className="field-error" role="alert">
+      {error ? (
+        <p className="visually-hidden" role="alert">
           {error}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

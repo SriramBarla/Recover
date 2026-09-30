@@ -3,6 +3,12 @@
 import Link from 'next/link';
 import type { Category, Meta, MyLostReport } from '@recover/shared/dto.ts';
 import { ItemCard } from '@/components/student/ItemCard.tsx';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button, LinkButton } from '@/components/ui/button.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconBell, IconCamera, IconChevronDown, IconChevronRight, IconSearch, IconSliders } from '@/components/ui/icons.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
+import { Select } from '@/components/ui/select.tsx';
 import { LoadMore } from '@/components/student/LoadMore.tsx';
 import { CATEGORY_LABELS, formatDay } from '@/components/student/format.ts';
 import {
@@ -79,47 +85,53 @@ export default async function SchoolHome({ params, searchParams }: Props) {
 
   return (
     <div className="stack-lg">
-      <h1>Lost and found</h1>
+      <PageHeader title="Lost and found" description={`Things found at ${school.name}. Staff check every post before it shows here.`} />
 
-      <form role="search" action={`/s/${code}/search`} method="get" className="row">
+      <form role="search" action={`/s/${code}/search`} method="get" className="search-bar">
         <label htmlFor="home-q" className="visually-hidden">
           Search found items
         </label>
-        <input
-          id="home-q"
-          name="q"
-          type="search"
-          className="input"
-          style={{ flex: '1 1 14rem', width: 'auto' }}
-          placeholder="Search, like: blue water bottle"
-          maxLength={120}
-          required
-        />
-        <button type="submit" className="btn btn-primary">
+        <span className="search-field">
+          <IconSearch className="search-icon" />
+          <input
+            id="home-q"
+            name="q"
+            type="search"
+            className="input"
+            placeholder="Search, like: blue water bottle"
+            maxLength={120}
+            required
+          />
+        </span>
+        <Button type="submit" variant="primary">
           Search
-        </button>
+        </Button>
       </form>
 
       <div className="grid-wide">
-        <Link className="btn btn-primary btn-lg btn-block" href={`/s/${code}/found${src ? `?src=${src}` : ''}`} prefetch={false}>
+        <LinkButton variant="primary" size="lg" block icon={<IconCamera />} href={`/s/${code}/found${src ? `?src=${src}` : ''}`} prefetch={false}>
           Found something
-        </Link>
-        <Link className="btn btn-lg btn-block" href={`/s/${code}/lost`} prefetch={false}>
+        </LinkButton>
+        <LinkButton size="lg" block icon={<IconSearch />} href={`/s/${code}/lost`} prefetch={false}>
           I lost something
-        </Link>
+        </LinkButton>
       </div>
 
       {reports.length > 0 && (
         <Link className="card-link" href={`/s/${code}/lost/mine`} prefetch={false}>
           <div className="card spread">
-            <strong>Your lost reports</strong>
+            <span className="with-icon">
+              <IconBell />
+              <strong>Your lost reports</strong>
+            </span>
             <span className="chips">
-              <span className="badge">{reports.length} open</span>
+              <Badge>{reports.length} open</Badge>
               {newMatches > 0 && (
-                <span className="badge badge-warn">
+                <Badge tone="accent" icon={<IconBell />}>
                   {newMatches === 1 ? 'New match' : `${newMatches} with new matches`}
-                </span>
+                </Badge>
               )}
+              <IconChevronRight className="muted" />
             </span>
           </div>
         </Link>
@@ -127,69 +139,69 @@ export default async function SchoolHome({ params, searchParams }: Props) {
 
       <section aria-labelledby="feed-heading" className="stack">
         <h2 id="feed-heading">Found items</h2>
-        <form method="get" action={`/s/${code}`} className="row" aria-label="Filter found items">
-          <div className="field">
-            <label className="label" htmlFor="f-location">
-              Pickup location
-            </label>
-            <select id="f-location" name="location" className="select" defaultValue={form.location}>
-              <option value="">All locations</option>
-              {meta.locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="f-category">
-              Category
-            </label>
-            <select id="f-category" name="category" className="select" defaultValue={form.category}>
-              <option value="">All categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="f-since">
-              Found
-            </label>
-            <select id="f-since" name="since" className="select" defaultValue={form.since}>
-              <option value="">Any time</option>
-              <option value="7">In the last 7 days</option>
-              <option value="30">In the last 30 days</option>
-            </select>
-          </div>
-          <div className="row" style={{ alignSelf: 'flex-end' }}>
-            <button type="submit" className="btn">
-              Apply filters
-            </button>
-            {filtered && (
-              <Link href={`/s/${code}`} prefetch={false}>
-                Clear filters
-              </Link>
-            )}
-          </div>
-        </form>
+        <details className="filter-panel" open={filtered ? true : undefined}>
+          <summary className="btn filter-summary">
+            <IconSliders />
+            <span>Filter items</span>
+            {filtered ? <Badge tone="brand">On</Badge> : null}
+            <IconChevronDown className="filter-chevron" />
+          </summary>
+          <form method="get" action={`/s/${code}`} className="filter-bar" aria-label="Filter found items">
+            <Select
+              id="f-location"
+              name="location"
+              label="Pickup location"
+              defaultValue={form.location}
+              placeholder="All locations"
+              options={meta.locations.map((l) => ({ value: l.id, label: l.name }))}
+            />
+            <Select
+              id="f-category"
+              name="category"
+              label="Category"
+              defaultValue={form.category}
+              placeholder="All categories"
+              options={categories.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
+            />
+            <Select
+              id="f-since"
+              name="since"
+              label="Found"
+              defaultValue={form.since}
+              placeholder="Any time"
+              options={[
+                { value: '7', label: 'In the last 7 days' },
+                { value: '30', label: 'In the last 30 days' },
+              ]}
+            />
+            <div className="button-row filter-actions">
+              <Button type="submit" variant="primary">
+                Apply filters
+              </Button>
+              {filtered && (
+                <LinkButton variant="ghost" href={`/s/${code}`} prefetch={false}>
+                  Clear filters
+                </LinkButton>
+              )}
+            </div>
+          </form>
+        </details>
 
         {items.length === 0 ? (
-          <div className="notice">
-            {filtered ? (
-              <p>No found items match these filters.</p>
-            ) : (
-              <p>No found items are posted right now. Check back later.</p>
-            )}
-            <p>
-              Lost something? <Link href={`/s/${code}/lost`} prefetch={false}>Report what you lost</Link> and we will show you
-              matches here.
-            </p>
-          </div>
+          <EmptyState
+            title={filtered ? 'No found items match these filters.' : 'No found items are posted right now.'}
+            icon={<IconSearch />}
+            actions={
+              <LinkButton variant="primary" icon={<IconSearch />} href={`/s/${code}/lost`} prefetch={false}>
+                Report what you lost
+              </LinkButton>
+            }
+          >
+            {filtered ? 'Try fewer filters. ' : 'Check back later. '}
+            Lost something? Report what you lost and we will show you matches here.
+          </EmptyState>
         ) : (
-          <ul className="grid" aria-label="Found items" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul className="item-grid" aria-label="Found items">
             {items.map((item, i) => (
               <li key={item.id}>
                 <ItemCard

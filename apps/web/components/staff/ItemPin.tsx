@@ -1,6 +1,6 @@
 'use client';
 
-import { MapCanvas } from './MapCanvas.tsx';
+import { MapPicker } from '@/components/ui/map-picker.tsx';
 
 export type PinMapInfo = { versionId: string; url: string | null; width: number; height: number } | null;
 
@@ -36,10 +36,10 @@ export function ItemPin({
   }
   if (!src) return <span>{text} (on an earlier map version)</span>;
   return (
-    <details>
+    <details className="pin-details">
       <summary>Show pin on map ({text})</summary>
-      <div style={{ marginTop: '0.5rem' }}>
-        <MapCanvas src={src} alt={`Campus map with the pin for ${label}`} width={width} height={height} markers={[{ id: 'pin', x: pin.x, y: pin.y, label }]} maxWidth="32rem" />
+      <div style={{ marginTop: '0.5rem', maxWidth: '32rem' }}>
+        <MapPicker src={src} width={width} height={height} value={pin} readOnly label={`Campus map with the pin for ${label}`} />
       </div>
     </details>
   );

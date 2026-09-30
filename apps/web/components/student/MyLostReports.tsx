@@ -4,12 +4,19 @@
 // (lost_reports_version trigger), so "This is it" and "Dismiss" stay disabled until the seen calls finish
 // and the refreshed reports (with current row versions) arrive. A close that still loses a race (a new
 // match landing meanwhile) re-reads the report once and retries.
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import type { PublicLostReport, PublicMatch } from '@/lib/storage-url.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button, LinkButton } from '@/components/ui/button.tsx';
+import { CategoryIcon } from '@/components/ui/category.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconBell, IconCheck, IconChevronRight, IconClock, IconSearch, IconX } from '@/components/ui/icons.tsx';
+import { ItemCard } from '@/components/ui/item-card.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { StatusBadge } from '@/components/ui/status-badge.tsx';
 import { apiFetch } from './client-api.ts';
-import { categoryLabel, custodyLine, photoAlt } from './format.ts';
+import { categoryLabel } from './format.ts';
 
 export type ReportView = PublicLostReport & { hasNew: boolean; expiresLabel: string };
 
@@ -79,72 +86,90 @@ export function MyLostReports({
   return (
     <div className="stack-lg">
       <div aria-live="polite">
-        {message && <p className={message.ok ? 'notice notice-ok' : 'notice notice-danger'}>{message.text}</p>}
+        {message && (
+          <Notice tone={message.ok ? 'success' : 'danger'}>
+            <p>{message.text}</p>
+          </Notice>
+        )}
       </div>
       {reports.length === 0 && (
-        <div className="notice stack">
-          <p>You have no open lost reports on this browser.</p>
-          <p>
-            <Link className="btn btn-primary" href={`/s/${code}/lost`} prefetch={false}>
+        <EmptyState
+          title="You have no open lost reports on this browser."
+          icon={<IconSearch />}
+          actions={
+            <LinkButton variant="primary" href={`/s/${code}/lost`} prefetch={false} icon={<IconSearch />}>
               Report what you lost
-            </Link>
-          </p>
-        </div>
+            </LinkButton>
+          }
+        >
+          When you report something, we show you matching found items here.
+        </EmptyState>
       )}
       {reports.map((report) => (
         <article key={report.id} className="card stack" aria-labelledby={`report-${report.id}`}>
           <div className="spread">
-            <h2 id={`report-${report.id}`}>{categoryLabel(report.category)}</h2>
+            <h2 id={`report-${report.id}`} className="with-icon">
+              <CategoryIcon category={report.category} size={22} />
+              {categoryLabel(report.category)}
+            </h2>
             <span className="chips">
-              <span className="badge">Open</span>
-              {newOnOpen.has(report.id) && <span className="badge badge-warn">New match</span>}
+              <StatusBadge kind="report" status="open" />
+              {newOnOpen.has(report.id) && (
+                <Badge tone="accent" icon={<IconBell />}>
+                  New match
+                </Badge>
+              )}
             </span>
           </div>
           <p>{report.description}</p>
-          <p className="small muted">Open until {report.expiresLabel}.</p>
+          <p className="small muted with-icon">
+            <IconClock size={16} />
+            Open until {report.expiresLabel}.
+          </p>
 
           {report.matches.length === 0 ? (
             <p className="muted">No matches yet. We will show them here when a matching item is posted, so check back.</p>
           ) : (
             <>
               <h3>Possible matches</h3>
-              <ul className="grid" aria-label="Possible matches" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul className="item-list" aria-label="Possible matches">
                 {report.matches.map((m) => (
-                  <li key={m.itemId} className="card item-card">
-                    {m.thumbUrl ? (
-                      <img className="thumb" src={m.thumbUrl} alt={photoAlt(m.category)} width={400} height={400} loading="lazy" decoding="async" />
-                    ) : (
-                      <div className="thumb" aria-hidden="true" />
-                    )}
-                    <div className="body stack">
-                      <p className="desc">{m.description}</p>
-                      <p className="small">
-                        <span className="mono">{m.publicId}</span>
-                        <br />
-                        {custodyLine(m.custody, locationNames[m.locationId] ?? null)}
-                      </p>
-                      <Link href={`/s/${code}/items/${m.publicId}`} prefetch={false}>
-                        View listing
-                      </Link>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-block"
-                        disabled={locked}
-                        onClick={() => void close(report, 'found', m)}
-                        aria-label={`This is it: ${m.publicId}`}
-                      >
-                        This is it
-                      </button>
-                    </div>
+                  <li key={m.itemId}>
+                    <ItemCard
+                      variant="row"
+                      publicId={m.publicId}
+                      category={m.category}
+                      description={m.description}
+                      photo={m.thumbUrl ? { url: m.thumbUrl } : null}
+                      custody={m.custody}
+                      locationName={locationNames[m.locationId] ?? null}
+                      actions={
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={locked}
+                            onClick={() => void close(report, 'found', m)}
+                            aria-label={`This is it: ${m.publicId}`}
+                            icon={<IconCheck />}
+                          >
+                            This is it
+                          </Button>
+                          <LinkButton variant="ghost" size="sm" href={`/s/${code}/items/${m.publicId}`} prefetch={false} iconEnd={<IconChevronRight />}>
+                            View listing
+                          </LinkButton>
+                        </>
+                      }
+                    />
                   </li>
                 ))}
               </ul>
             </>
           )}
           <div>
-            <button type="button" className="btn btn-ghost" disabled={locked} onClick={() => void close(report, 'dismiss')}>
+            <Button variant="ghost" disabled={locked} onClick={() => void close(report, 'dismiss')} icon={<IconX />}>
               Dismiss this report
-            </button>
+            </Button>
           </div>
         </article>
       ))}

@@ -1,6 +1,7 @@
 // /staff/[code]/locations: pickup locations (create, rename, hours, deactivate) and their pins on
 // the active or a draft map (§5.5; §24 step 3).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { LocationsManager } from '@/components/staff/LocationsManager.tsx';
 import { locationsOf, mapVersionsOf } from '@/components/staff/shapes.ts';
@@ -20,10 +21,7 @@ export default async function LocationsPage({ params }: PageProps<'/staff/[code]
 
   return (
     <>
-      <div className="stack">
-        <h1>Locations</h1>
-        <p className="muted">Where students bring found items and where owners pick them up.</p>
-      </div>
+      <PageHeader title={<>Locations</>} description={<>Where students bring found items and where owners pick them up.</>} />
       {locations.ok ? (
         <LocationsManager code={code} locations={locations.data} versions={versions.ok ? versions.data : []} />
       ) : (

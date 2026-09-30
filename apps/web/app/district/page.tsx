@@ -2,7 +2,15 @@
 // alert channel; nobody is paged) plus the school list.
 import type { Metadata } from 'next';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
-import { badgeClass, fmtDateTime, humanize, type Tone } from '@/components/staff/format.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { buttonClass } from '@/components/ui/button.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconBell, IconBuilding, IconPlus, IconShieldCheck, IconSliders } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
+import { Stat, StatGrid } from '@/components/ui/stat.tsx';
+import { Table } from '@/components/ui/table.tsx';
+import { fmtDateTime, humanize, type Tone } from '@/components/staff/format.ts';
 import { alertsOf } from '@/components/staff/shapes.ts';
 import { api } from '@/lib/db.ts';
 import { districtCall, districtSchools, load, requireDistrict, signinPath } from '@/lib/staff.ts';
@@ -51,40 +59,60 @@ export default async function DistrictOverview() {
 
   return (
     <>
-      <h1>District overview</h1>
+      <PageHeader title={<>District overview</>} description={<>Health checks, alerts from the last day, and every school in the district.</>} />
       <section className="stack" aria-labelledby="health-h">
-        <h2 id="health-h">System health</h2>
+        <h2 id="health-h" className="with-icon">
+          <IconShieldCheck />
+          System health
+        </h2>
         {health.ok ? (
-          <div className="kpis">
+          <StatGrid>
             {tiles(health.data).map((t) => (
-              <div key={t.label} className="kpi">
-                <div className="value">{t.value}</div>
-                <div className="label">{t.label}</div>
-                <span className={badgeClass(t.tone)}>{t.tone === 'ok' ? 'OK' : t.tone === 'danger' ? 'Act now' : 'Check'}</span>
-                {t.note ? <div className="hint small">{t.note}</div> : null}
-              </div>
+              <Stat
+                key={t.label}
+                value={t.value}
+                label={t.label}
+                tone={t.tone === 'warn' || t.tone === 'danger' ? t.tone : undefined}
+                hint={
+                  <>
+                    <Badge tone={t.tone}>{t.tone === 'ok' ? 'OK' : t.tone === 'danger' ? 'Act now' : 'Check'}</Badge>
+                    {t.note ? <span>{t.note}</span> : null}
+                  </>
+                }
+              />
             ))}
-          </div>
+          </StatGrid>
         ) : (
           <ErrorNotice code={health.code} what="Health" />
         )}
       </section>
       <section className="stack" aria-labelledby="alerts-h">
-        <h2 id="alerts-h">Alerts, last 24 hours</h2>
+        <h2 id="alerts-h" className="with-icon">
+          <IconBell />
+          Alerts, last 24 hours
+        </h2>
         {alerts.ok ? (
           alerts.data.length === 0 ? (
-            <div className="notice notice-ok">No alerts.</div>
+            <Notice tone="success">No alerts.</Notice>
           ) : (
-            <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
+            <ul className="alert-list">
               {alerts.data.map((a) => (
-                <li key={a.id} className={`notice ${SEVERITY_TONE[a.severity ?? ''] === 'danger' ? 'notice-danger' : 'notice-warn'}`}>
-                  <strong>{humanize(a.name)}</strong>
-                  {a.schoolCode ? <span className="badge" style={{ marginLeft: '0.5rem' }}>{a.schoolCode}</span> : null}
-                  {a.severity ? <span className={badgeClass(SEVERITY_TONE[a.severity] ?? 'neutral')} style={{ marginLeft: '0.5rem' }}>{a.severity}</span> : null}
-                  <div className="small muted">
-                    {fmtDateTime(a.createdAt)}
-                    {a.detail ? ` - ${a.detail}` : ''}
-                  </div>
+                <li key={a.id}>
+                  <Notice
+                    tone={SEVERITY_TONE[a.severity ?? ''] === 'danger' ? 'danger' : 'warning'}
+                    title={
+                      <>
+                        {humanize(a.name)}
+                        {a.schoolCode ? <Badge className="mono">{a.schoolCode}</Badge> : null}
+                        {a.severity ? <Badge tone={SEVERITY_TONE[a.severity] ?? 'neutral'}>{a.severity}</Badge> : null}
+                      </>
+                    }
+                  >
+                    <p className="small muted">
+                      {fmtDateTime(a.createdAt)}
+                      {a.detail ? ` - ${a.detail}` : ''}
+                    </p>
+                  </Notice>
                 </li>
               ))}
             </ul>
@@ -95,41 +123,54 @@ export default async function DistrictOverview() {
       </section>
       <section className="stack" aria-labelledby="schools-h">
         <div className="spread">
-          <h2 id="schools-h">Schools</h2>
-          <a className="btn" href="/district/schools">
+          <h2 id="schools-h" className="with-icon">
+            <IconBuilding />
+            Schools
+          </h2>
+          <a className={buttonClass({})} href="/district/schools">
+            <IconSliders />
             Manage schools
           </a>
         </div>
         {schools.ok ? (
           schools.data.length === 0 ? (
-            <p className="muted">No schools yet.</p>
+            <EmptyState
+              icon={<IconBuilding />}
+              title="No schools yet."
+              actions={
+                <a className={buttonClass({ variant: 'primary' })} href="/district/schools">
+                  <IconPlus />
+                  Add a school
+                </a>
+              }
+            />
           ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th scope="col">Code</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Open</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schools.data.map((s) => (
-                    <tr key={s.id}>
-                      <td className="mono">{s.code}</td>
-                      <td>{s.name}</td>
-                      <td>{s.active ? <span className="badge badge-ok">Active</span> : <span className="badge">Inactive</span>}</td>
-                      <td className="row">
+            <Table caption="Schools" hideCaption>
+              <thead>
+                <tr>
+                  <th scope="col">Code</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schools.data.map((s) => (
+                  <tr key={s.id}>
+                    <td className="mono">{s.code}</td>
+                    <td>{s.name}</td>
+                    <td>{s.active ? <Badge tone="ok">Active</Badge> : <Badge>Inactive</Badge>}</td>
+                    <td>
+                      <div className="link-row">
                         <a href={`/staff/${s.code}/queue`}>Queue</a>
                         <a href={`/staff/${s.code}/stats`}>Dashboard</a>
                         <a href={`/district/schools?school=${s.code}`}>Onboarding</a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           )
         ) : (
           <ErrorNotice code={schools.code} what="Schools" />

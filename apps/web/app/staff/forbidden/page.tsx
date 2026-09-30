@@ -2,6 +2,10 @@
 import type { Metadata } from 'next';
 import { ROLE_LABELS } from '@/components/staff/format.ts';
 import { signOutAction } from '@/components/staff/actions.ts';
+import { Button, buttonClass } from '@/components/ui/button.tsx';
+import { IconArrowLeft, IconLogOut } from '@/components/ui/icons.tsx';
+import { Logo } from '@/components/ui/logo.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
 
 export const metadata: Metadata = { title: 'No access - Recover' };
 
@@ -19,8 +23,9 @@ export default async function Forbidden({ searchParams }: PageProps<'/staff/forb
 
   return (
     <main id="main" className="container-narrow stack-lg" style={{ paddingTop: '3rem' }}>
+      <Logo size={36} />
       <h1>You do not have access</h1>
-      <div className="notice notice-danger" role="alert">
+      <Notice tone="danger" live="assertive">
         {district
           ? 'District administration is limited to district admins.'
           : role && code
@@ -28,16 +33,17 @@ export default async function Forbidden({ searchParams }: PageProps<'/staff/forb
             : code
               ? `Your account is not a member of ${code}.`
               : 'Your account cannot open this page.'}
-      </div>
+      </Notice>
       <p className="muted">If you think this is wrong, ask your school admin to check the roster.</p>
-      <div className="row">
-        <a className="btn btn-primary" href={code && role ? `/staff/${code}/queue` : '/staff'}>
+      <div className="button-row">
+        <a className={buttonClass({ variant: 'primary' })} href={code && role ? `/staff/${code}/queue` : '/staff'}>
+          <IconArrowLeft />
           {code && role ? 'Back to the queue' : 'Choose a school'}
         </a>
         <form action={signOutAction}>
-          <button type="submit" className="btn">
+          <Button type="submit" icon={<IconLogOut />}>
             Sign in with a different account
-          </button>
+          </Button>
         </form>
       </div>
     </main>

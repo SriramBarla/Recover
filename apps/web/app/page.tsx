@@ -2,6 +2,9 @@
 // before (or without) any JavaScript.
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { Button } from '@/components/ui/button.tsx';
+import { IconArrowRight } from '@/components/ui/icons.tsx';
+import { Logo } from '@/components/ui/logo.tsx';
 import { normalizeSchoolCode } from '@/lib/cache.ts';
 
 export const metadata: Metadata = { title: 'Recover - school lost and found' };
@@ -16,11 +19,11 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
   return (
     <main id="main" className="container-narrow stack-lg" style={{ paddingTop: '3rem' }}>
       <header className="stack">
-        <p className="brand">Recover</p>
+        <Logo size={40} />
         <h1>School lost and found</h1>
-        <p>See what has been found at your school, report something you lost, or post something you found.</p>
+        <p className="muted">See what has been found at your school, report something you lost, or post something you found.</p>
       </header>
-      <form method="get" action="/" className="card stack">
+      <form method="get" action="/" className="card card-pad-lg stack">
         <div className="field">
           <label htmlFor="code" className="label">
             School code
@@ -47,9 +50,9 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
             </p>
           )}
         </div>
-        <button type="submit" className="btn btn-primary btn-lg">
+        <Button type="submit" variant="primary" size="lg" iconEnd={<IconArrowRight />}>
           Go to my school
-        </button>
+        </Button>
       </form>
       <p className="small muted">
         School staff: <a href="/staff">sign in here</a>.

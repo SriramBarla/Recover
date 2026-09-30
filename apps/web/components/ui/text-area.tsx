@@ -87,6 +87,7 @@ export function TextArea({
             {...p}
             className={cx('textarea', className)}
             aria-describedby={describedBy(p['aria-describedby'], rest['aria-describedby'])}
+            aria-invalid={p['aria-invalid'] ?? rest['aria-invalid']}
             maxLength={maxLength}
             value={controlled ? text : undefined}
             defaultValue={controlled ? undefined : defaultValue}

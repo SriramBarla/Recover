@@ -1,6 +1,5 @@
 // /s/[code]/search?q=: results grid for this school (§11), and, when the school has opted in, the optional
 // cross-school search (F-79). Same `search` rate limit as the JSON route; query text is never logged.
-import Link from 'next/link';
 import { headers } from 'next/headers';
 import { PublicError } from '@recover/shared/errors.ts';
 import type { PublicItemRow } from '@recover/shared/dto.ts';
@@ -9,6 +8,11 @@ import { ItemCard } from '@/components/student/ItemCard.tsx';
 import { formatDay } from '@/components/student/format.ts';
 import { deviceDigest, firstParam, locationNames, metaForPage, titleFor, type SearchParams } from '@/components/student/server.ts';
 import { retryHint } from '@/components/student/client-api.ts';
+import { Button, LinkButton } from '@/components/ui/button.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconSearch } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { searchQueryHmac } from '@/lib/cache.ts';
 import { api } from '@/lib/db.ts';
 import { take } from '@/lib/ratelimit.ts';
@@ -66,39 +70,41 @@ export default async function SearchPage({ params, searchParams }: Props) {
 
   return (
     <div className="stack-lg">
-      <h1>Search found items</h1>
-      <form role="search" method="get" action={`/s/${code}/search`} className="stack">
-        <div className="row">
+      <PageHeader title="Search found items" back={{ href: `/s/${code}`, label: 'All found items', prefetch: false }} />
+      <form role="search" method="get" action={`/s/${code}/search`} className="stack-sm">
+        <div className="search-bar">
           <label htmlFor="search-q" className="visually-hidden">
             Search found items
           </label>
-          <input
-            id="search-q"
-            name="q"
-            type="search"
-            className="input"
-            style={{ flex: '1 1 14rem', width: 'auto' }}
-            defaultValue={raw}
-            placeholder="Like: black hoodie, calculator, airpods"
-            maxLength={120}
-            required
-          />
-          <button type="submit" className="btn btn-primary">
+          <span className="search-field">
+            <IconSearch className="search-icon" />
+            <input
+              id="search-q"
+              name="q"
+              type="search"
+              className="input"
+              defaultValue={raw}
+              placeholder="Like: black hoodie, calculator, airpods"
+              maxLength={120}
+              required
+            />
+          </span>
+          <Button type="submit" variant="primary">
             Search
-          </button>
+          </Button>
         </div>
         {crossAllowed && (
-          <label className="row small">
-            <input type="checkbox" name="all" value="1" defaultChecked={all} style={{ width: '1.25rem', height: '1.25rem' }} />
-            Include other schools in the district
+          <label className="choice small">
+            <input type="checkbox" name="all" value="1" defaultChecked={all} />
+            <span>Include other schools in the district</span>
           </label>
         )}
       </form>
 
       {problem && (
-        <p className="notice notice-warn" role="alert">
+        <Notice tone="warning" live="assertive">
           {problem}
-        </p>
+        </Notice>
       )}
 
       {results && (
@@ -107,17 +113,21 @@ export default async function SearchPage({ params, searchParams }: Props) {
             {results.length === 0 ? 'No matches' : `${results.length} ${results.length === 1 ? 'match' : 'matches'}`}
           </h2>
           {results.length === 0 ? (
-            <div className="notice stack">
-              <p>Nothing matches that yet. Try other words, like the color, brand, or what it is.</p>
-              <p>
-                <Link className="btn btn-primary" href={`/s/${code}/lost`} prefetch={false}>
+            <EmptyState
+              title="Nothing matches that yet."
+              headingLevel={3}
+              icon={<IconSearch />}
+              actions={
+                <LinkButton variant="primary" href={`/s/${code}/lost`} prefetch={false} icon={<IconSearch />}>
                   Report what you lost
-                </Link>
-              </p>
-              <p className="small">We will show you new matches on this browser when a matching item is posted.</p>
-            </div>
+                </LinkButton>
+              }
+            >
+              Try other words, like the color, brand, or what it is. We will show you new matches on this browser when a matching
+              item is posted.
+            </EmptyState>
           ) : (
-            <ul className="grid" aria-label="Search results" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            <ul className="item-grid" aria-label="Search results">
               {results.map((item, i) => {
                 const here = item.schoolCode === code;
                 return (

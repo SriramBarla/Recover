@@ -543,6 +543,16 @@ export function IconLogOut(p: IconProps) {
   );
 }
 
+export function IconPrinter(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M7 8.5V3.5h10v5" />
+      <rect x="3.5" y="8.5" width="17" height="8" rx="2" />
+      <path d="M7 14h10v6.5H7Z" />
+    </Svg>
+  );
+}
+
 export function IconTag(p: IconProps) {
   return (
     <Svg {...p}>

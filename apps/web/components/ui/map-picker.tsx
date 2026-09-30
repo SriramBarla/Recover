@@ -10,7 +10,8 @@
 //   must not (the public DTO has no pin) and pass `highlightZoneId` instead.
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { cx } from './cx.ts';
-import { IconBuilding, IconChevronDown, IconMapPin, IconX } from './icons.tsx';
+import { TextInput } from './field.tsx';
+import { IconBuilding, IconChevronDown, IconCrosshair, IconMapPin, IconX } from './icons.tsx';
 import { nearestZone, zoneBox, type MapMarker, type MapPoint, type MapZone } from './map-geometry.ts';
 
 export type { MapMarker, MapPoint, MapZone } from './map-geometry.ts';
@@ -37,6 +38,11 @@ export type MapPickerProps = {
   clearable?: boolean;
   zoneSelectLabel?: string;
   help?: string;
+  // Staff editors: type Across/Down percentages as a precise non-map fallback, and show the
+  // coordinates in the readout. pointLabel names the point ("location pin", "zone center").
+  coordinateInputs?: boolean;
+  showCoordinates?: boolean;
+  pointLabel?: string;
   priority?: boolean;
   id?: string;
   className?: string;
@@ -106,6 +112,9 @@ export function MapPicker({
   clearable = false,
   zoneSelectLabel = 'Or choose an area from the list',
   help,
+  coordinateInputs = false,
+  showCoordinates = false,
+  pointLabel = 'pin',
   priority = false,
   id,
   className,
@@ -119,6 +128,8 @@ export function MapPicker({
   const [message, setMessage] = useState('');
   const [dropKey, setDropKey] = useState(0);
   const [natural, setNatural] = useState<{ src: string; w: number; h: number } | null>(null);
+  const [typedX, setTypedX] = useState('');
+  const [typedY, setTypedY] = useState('');
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const known = Boolean(width && width > 0 && height && height > 0);
@@ -211,7 +222,19 @@ export function MapPicker({
     place({ x: z.cx, y: z.cy }, `Pin placed at ${z.name}.`);
   }
 
-  const readoutText = value ? (zone ? `Pin placed near ${zone.name}` : 'Pin placed (not near a named area)') : 'No pin yet';
+  function placeTyped() {
+    const x = Number(typedX);
+    const y = Number(typedY);
+    if (typedX === '' || typedY === '' || !Number.isFinite(x) || !Number.isFinite(y)) {
+      setMessage('Type both numbers, from 0 to 100.');
+      return;
+    }
+    place({ x: x / 100, y: y / 100 });
+  }
+
+  const coords = value ? `${(value.x * 100).toFixed(1)}% across, ${(value.y * 100).toFixed(1)}% down` : '';
+  const placed = zone ? `Pin placed near ${zone.name}` : zones.length > 0 ? 'Pin placed (not near a named area)' : 'Pin placed';
+  const readoutText = value ? (showCoordinates ? `${placed}: ${coords}` : placed) : 'No pin yet';
   const roLabel = readOnly
     ? value
       ? `${label}, pin ${zone ? `near ${zone.name}` : 'placed'}`
@@ -261,6 +284,15 @@ export function MapPicker({
         {value ? <Marker key={dropKey} p={value} animate={interactive && dropKey > 0} /> : null}
         {interactive ? <span className="map-crosshair" style={{ left: `${cross.x * 100}%`, top: `${cross.y * 100}%` }} /> : null}
       </div>
+      {markers.length > 0 ? (
+        <ul className="visually-hidden">
+          {markers.map((m) => (
+            <li key={m.id}>
+              {m.label}: {Math.round(m.x * 100)}% across, {Math.round(m.y * 100)}% down
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {interactive ? (
         <>
           <div className="map-readout" id={readoutId}>
@@ -275,6 +307,30 @@ export function MapPicker({
               </button>
             ) : null}
           </div>
+          {coordinateInputs ? (
+            <div className="row coordinate-inputs">
+              <TextInput
+                id={`${base}-x`}
+                label="Across (%)"
+                inputMode="decimal"
+                value={typedX}
+                onChange={(e) => setTypedX(e.target.value)}
+                placeholder={value ? String(Math.round(value.x * 1000) / 10) : '50'}
+              />
+              <TextInput
+                id={`${base}-y`}
+                label="Down (%)"
+                inputMode="decimal"
+                value={typedY}
+                onChange={(e) => setTypedY(e.target.value)}
+                placeholder={value ? String(Math.round(value.y * 1000) / 10) : '50'}
+              />
+              <button type="button" className="btn" onClick={placeTyped}>
+                <IconCrosshair size={18} />
+                <span className="btn-label">Set {pointLabel}</span>
+              </button>
+            </div>
+          ) : null}
           {zones.length > 0 ? (
             <div className="field">
               <label className="label" htmlFor={selectId}>

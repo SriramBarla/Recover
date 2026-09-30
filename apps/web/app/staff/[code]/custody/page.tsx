@@ -6,6 +6,11 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import type { FeedPage, ListingRow, PublicItemRow } from '@recover/shared/dto.ts';
 import { toPublicError } from '@recover/shared/errors.ts';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconSearch } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { CustodyBoard } from '@/components/staff/CustodyBoard.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { custodyListsOf, type CustodyLists, type CustodyRow } from '@/components/staff/shapes.ts';
@@ -110,28 +115,31 @@ export default async function CustodyPage({ params, searchParams }: PageProps<'/
 
   return (
     <>
-      <div className="stack">
-        <h1>Custody</h1>
-        <p className="muted">Check items in when they arrive, move them between locations, and record claims and disposals.</p>
-      </div>
-      <form method="get" className="row" role="search" aria-label="Find an item">
-        <label className="field" style={{ minWidth: '16rem' }}>
-          <span className="label">Find by item ID</span>
-          <input className="input mono" name="find" defaultValue={find} placeholder={`${code}-W-000123`} autoComplete="off" />
-        </label>
-        <button type="submit" className="btn" style={{ alignSelf: 'flex-end' }}>
+      <PageHeader title="Custody" description="Check items in when they arrive, move them between locations, and record claims and disposals." />
+      <form method="get" className="row" role="search" aria-label="Find an item" style={{ alignItems: 'flex-end' }}>
+        <TextInput
+          id="custody-find"
+          label="Find by item ID"
+          fieldClassName="inline-field"
+          className="mono"
+          name="find"
+          defaultValue={find}
+          placeholder={`${code}-W-000123`}
+          autoComplete="off"
+        />
+        <Button type="submit" icon={<IconSearch />}>
           Find
-        </button>
+        </Button>
       </form>
       {findError ? (
-        <div className="notice notice-warn" role="alert">
+        <Notice tone="warning" live="assertive">
           {findError}
-        </div>
+        </Notice>
       ) : null}
       {loaded.ok ? (
         <>
           {loaded.data.fallback ? (
-            <div className="notice">Showing published items only. Unpublished items at the office are reachable from the queue or by ID.</div>
+            <Notice>Showing published items only. Unpublished items at the office are reachable from the queue or by ID.</Notice>
           ) : null}
           <CustodyBoard
             code={code}

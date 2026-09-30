@@ -32,9 +32,9 @@ function TileInner({ icon, label, description, withCheck }: TileLook & { withChe
   );
 }
 
-export function TileLink({ href, className, accent, ...look }: TileLook & { href: string; className?: string }) {
+export function TileLink({ href, className, accent, prefetch, ...look }: TileLook & { href: string; className?: string; prefetch?: boolean }) {
   return (
-    <Link href={href} className={cx('tile', accent && 'tile-tone-accent', className)}>
+    <Link href={href} prefetch={prefetch} className={cx('tile', accent && 'tile-tone-accent', className)}>
       <TileInner {...look} />
     </Link>
   );

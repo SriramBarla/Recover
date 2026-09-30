@@ -2,6 +2,11 @@
 // page, and the step-up destination for destructive actions (G-31: ?reauth=1).
 import type { Metadata } from 'next';
 import { devSignInAction, googleSignInAction } from '@/components/staff/actions.ts';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconLock, IconShieldCheck, IconUser } from '@/components/ui/icons.tsx';
+import { Logo } from '@/components/ui/logo.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
 import { devLoginEnabled } from '@/lib/env.ts';
 import { safeReturnPath } from '@/lib/ops.ts';
 
@@ -41,45 +46,46 @@ export default async function SignInPage({ searchParams }: PageProps<'/staff/sig
   return (
     <main id="main" className="container-narrow stack-lg" style={{ paddingTop: '3rem' }}>
       <div className="stack">
+        <Logo size={40} />
         <h1>Recover staff sign in</h1>
         <p className="muted">For school staff and district administrators. Students do not need an account.</p>
       </div>
       {reauth ? (
-        <div className="notice notice-warn" role="status">
+        <Notice tone="warning" live="polite" title="Sign in again to continue">
           For your security, this action needs a recent sign-in. Sign in again to continue.
-        </div>
+        </Notice>
       ) : null}
       {error ? (
-        <div className="notice notice-danger" role="alert">
+        <Notice tone="danger" live="assertive">
           {error}
-        </div>
+        </Notice>
       ) : null}
-      <div className="card stack">
+      <div className="card card-pad-lg stack">
         {google ? (
           <form action={googleSignInAction}>
             <input type="hidden" name="callbackUrl" value={callbackUrl} />
-            <button type="submit" className="btn btn-primary btn-block btn-lg">
+            <Button type="submit" variant="primary" size="lg" block icon={<IconShieldCheck />}>
               Sign in with Google
-            </button>
+            </Button>
           </form>
         ) : (
           <p className="muted">Google sign-in is not configured in this environment.</p>
         )}
-        <p className="hint">Use your district Google account. Recover never asks for your password.</p>
+        <p className="hint with-icon" style={{ whiteSpace: 'normal' }}>
+          <IconLock size={16} />
+          Use your district Google account. Recover never asks for your password.
+        </p>
       </div>
       {dev ? (
-        <div className="card stack">
+        <div className="card card-pad-lg stack">
           <h2>Development sign in</h2>
           <p className="hint">Local development only. This form does not exist on deployed environments.</p>
           <form action={devSignInAction} className="stack">
             <input type="hidden" name="callbackUrl" value={callbackUrl} />
-            <label className="field">
-              <span className="label">Staff email</span>
-              <input className="input" type="email" name="email" required autoComplete="email" />
-            </label>
-            <button type="submit" className="btn">
+            <TextInput id="dev-email" label="Staff email" type="email" name="email" required autoComplete="email" />
+            <Button type="submit" icon={<IconUser />}>
               Sign in (dev)
-            </button>
+            </Button>
           </form>
         </div>
       ) : null}

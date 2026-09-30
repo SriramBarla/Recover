@@ -3,6 +3,7 @@
 import type { Metadata } from 'next';
 import { CalendarUpload } from '@/components/staff/CalendarUpload.tsx';
 import { ConfigForm } from '@/components/staff/ConfigForm.tsx';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { configOf } from '@/components/staff/shapes.ts';
 import { load, requireStaff, schoolCall, scopeOf, signinPath } from '@/lib/staff.ts';
@@ -17,10 +18,7 @@ export default async function ConfigPage({ params }: PageProps<'/staff/[code]/co
 
   return (
     <>
-      <div className="stack">
-        <h1>School settings</h1>
-        <p className="muted">A district switch that is off always wins over the school setting.</p>
-      </div>
+      <PageHeader title={<>School settings</>} description={<>A district switch that is off always wins over the school setting.</>} />
       {config.ok ? (
         <>
           <ConfigForm code={code} config={config.data} />

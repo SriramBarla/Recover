@@ -1,15 +1,17 @@
 // District admin shell (§5.6). Pages enforce district_admin with requireDistrict.
-import { NavLinks } from '@/components/staff/NavLinks.tsx';
+import { buttonClass } from '@/components/ui/button.tsx';
+import { IconBuilding } from '@/components/ui/icons.tsx';
+import { sectionIcon } from '@/components/staff/nav-icons.tsx';
 import { SessionKeepAlive } from '@/components/staff/SessionKeepAlive.tsx';
 import { TopBar } from '@/components/staff/TopBar.tsx';
 import { isDistrictAdmin, resolveStaff } from '@/lib/staff.ts';
 
 const ITEMS = [
-  { href: '/district', label: 'Overview', exact: true },
-  { href: '/district/schools', label: 'Schools' },
-  { href: '/district/maps', label: 'Map approvals' },
-  { href: '/district/settings', label: 'Settings' },
-  { href: '/district/stats', label: 'Stats' },
+  { href: '/district', label: 'Overview', match: 'exact' as const, icon: sectionIcon('overview') },
+  { href: '/district/schools', label: 'Schools', icon: sectionIcon('schools') },
+  { href: '/district/maps', label: 'Map approvals', icon: sectionIcon('maps') },
+  { href: '/district/settings', label: 'Settings', icon: sectionIcon('settings') },
+  { href: '/district/stats', label: 'Stats', icon: sectionIcon('stats') },
 ];
 
 export default async function DistrictLayout({ children }: LayoutProps<'/district'>) {
@@ -20,13 +22,19 @@ export default async function DistrictLayout({ children }: LayoutProps<'/distric
     <>
       <TopBar
         brandHref="/district"
-        context="District admin"
-        nav={ok ? <NavLinks items={ITEMS} label="District sections" /> : null}
+        context={{ label: 'Acting for', name: 'The whole district' }}
+        items={ok ? ITEMS : []}
+        navLabel="District sections"
         userLabel={r ? (r.user.displayName ?? r.user.email) : null}
-        links={<a href="/staff">Schools</a>}
+        links={
+          <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/staff">
+            <IconBuilding />
+            Schools
+          </a>
+        }
       />
       {ok ? <SessionKeepAlive /> : null}
-      <main id="main" className="container stack-lg">
+      <main id="main" className="container stack-lg compact">
         {children}
       </main>
     </>

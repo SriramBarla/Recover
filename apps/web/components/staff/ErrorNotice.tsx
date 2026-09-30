@@ -1,3 +1,5 @@
+import { Notice } from '@/components/ui/notice.tsx';
+
 // Friendly notice for a failed page load, chosen by public error code (server or client).
 const PAGE_MESSAGES: Record<string, string> = {
   not_found: 'We could not find that here.',
@@ -14,10 +16,10 @@ export function ErrorNotice({ code, what, signinHref }: { code: string; what?: s
   const message = PAGE_MESSAGES[code] ?? PAGE_MESSAGES.internal;
   const signIn = code === 'unauthorized' || code === 'assertion_invalid';
   return (
-    <div className="notice notice-danger" role="alert">
+    <Notice tone="danger" live="assertive">
       {what ? <strong>{what}: </strong> : null}
       {message}{' '}
       {signIn ? <a href={signinHref ?? '/staff/signin'}>Sign in</a> : null}
-    </div>
+    </Notice>
   );
 }

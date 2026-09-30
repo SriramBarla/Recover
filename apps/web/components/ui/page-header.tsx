@@ -9,7 +9,7 @@ export type PageHeaderProps = {
   title: ReactNode;
   eyebrow?: ReactNode;
   description?: ReactNode;
-  back?: { href: string; label: string };
+  back?: { href: string; label: string; prefetch?: boolean };
   actions?: ReactNode;
   className?: string;
   children?: ReactNode;
@@ -22,7 +22,7 @@ export function PageHeader({ title, eyebrow, description, back, actions, classNa
   return (
     <header className={cx('page-header', className)}>
       {back ? (
-        <Link className="page-header-back" href={back.href}>
+        <Link className="page-header-back" href={back.href} prefetch={back.prefetch}>
           <IconChevronLeft size={18} />
           {back.label}
         </Link>

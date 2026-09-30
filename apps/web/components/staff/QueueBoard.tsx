@@ -4,11 +4,21 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RejectReason, StaffItemRow } from '@recover/shared/dto.ts';
 import type { StaffMeta } from '../../lib/staff.ts';
+import { Badge } from '@/components/ui/badge.tsx';
+import { Button, buttonClass } from '@/components/ui/button.tsx';
+import { CategoryIcon } from '@/components/ui/category.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { PrivateNote } from '@/components/ui/field.tsx';
+import { IconAlert, IconArrowRight, IconCheck, IconCheckCircle, IconChevronDown, IconChevronLeft, IconChevronRight, IconClock, IconPencil, IconRefresh, IconX } from '@/components/ui/icons.tsx';
+import { Kbd } from '@/components/ui/kbd.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
+import { FlagChip } from '@/components/ui/status-badge.tsx';
 import { ActionError } from './ActionError.tsx';
 import { ApiError, staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
 import { REJECT_REASONS } from './constants.ts';
-import { REJECT_REASON_LABELS, badgeClass, categoryLabel, chipsFor, fmtAge, fmtDateTime } from './format.ts';
+import { REJECT_REASON_LABELS, categoryLabel, chipsFor, fmtAge, fmtDateTime } from './format.ts';
 import { ItemPhotos } from './ItemPhotos.tsx';
 import { ItemPin } from './ItemPin.tsx';
 import { EditForm, RejectForm } from './ReviewForms.tsx';
@@ -168,6 +178,7 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (t?.closest('dialog')) return; // a confirm dialog is open: the queue behind it is inert
       if (e.key === 'Escape') {
         if (panel) {
           e.preventDefault();
@@ -226,23 +237,23 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
         <p className="muted" style={{ margin: 0 }}>
           {items.length === 0 ? 'Nothing is waiting for review.' : `${items.length} pending item${items.length === 1 ? '' : 's'} loaded. Flagged items come first.`}
         </p>
-        <button type="button" className="btn" onClick={() => router.refresh()}>
+        <Button onClick={() => router.refresh()} icon={<IconRefresh />}>
           Refresh
-        </button>
+        </Button>
       </div>
       <div className="spread">
         <p className="hint" style={{ margin: 0 }}>
-          Keyboard: <kbd>J</kbd> next, <kbd>K</kbd> previous, <kbd>A</kbd> approve, <kbd>E</kbd> approve with edits, <kbd>R</kbd> reject, <kbd>X</kbd> select,{' '}
-          <kbd>Esc</kbd> close. Every shortcut has a button.
+          Keyboard: <Kbd>J</Kbd> next, <Kbd>K</Kbd> previous, <Kbd>A</Kbd> approve, <Kbd>E</Kbd> approve with edits, <Kbd>R</Kbd> reject, <Kbd>X</Kbd> select,{' '}
+          <Kbd>Esc</Kbd> close. Every shortcut has a button.
         </p>
         {items.length > 1 ? (
           <div className="row" role="group" aria-label="Move between items">
-            <button type="button" className="btn" disabled={focus <= 0} onClick={() => move(-1)}>
-              Previous item <kbd aria-hidden="true">K</kbd>
-            </button>
-            <button type="button" className="btn" disabled={focus >= items.length - 1} onClick={() => move(1)}>
-              Next item <kbd aria-hidden="true">J</kbd>
-            </button>
+            <Button disabled={focus <= 0} onClick={() => move(-1)} icon={<IconChevronLeft />}>
+              Previous item <Kbd aria-hidden="true">K</Kbd>
+            </Button>
+            <Button disabled={focus >= items.length - 1} onClick={() => move(1)} iconEnd={<IconChevronRight />}>
+              Next item <Kbd aria-hidden="true">J</Kbd>
+            </Button>
             <span className="small muted">
               {Math.min(focus + 1, items.length)} of {items.length}
             </span>
@@ -253,19 +264,22 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
         {live}
       </p>
       {live ? (
-        <div className="notice notice-ok" aria-hidden="true">
+        <Notice tone="success" aria-hidden="true">
           {live}
-        </div>
+        </Notice>
       ) : null}
 
       {selectedCount > 0 ? (
-        <div className="card stack" style={{ position: 'sticky', top: '0.5rem', zIndex: 2 }}>
+        <div className="card stack bulk-bar">
           <div className="spread">
-            <strong>{selectedCount} selected for bulk reject</strong>
+            <strong className="with-icon">
+              <IconCheck />
+              {selectedCount} selected for bulk reject
+            </strong>
             <div className="row">
-              <button type="button" className="btn btn-ghost" onClick={() => setSelected(new Set())}>
+              <Button variant="ghost" onClick={() => setSelected(new Set())} icon={<IconX />}>
                 Clear selection
-              </button>
+              </Button>
             </div>
           </div>
           <ConfirmButton
@@ -275,16 +289,13 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
             danger
             onConfirm={bulkReject}
           >
-            <label className="field" style={{ maxWidth: '20rem' }}>
-              <span className="label">Reason for all selected</span>
-              <select className="select" value={bulkReason} onChange={(e) => setBulkReason(e.target.value as RejectReason)}>
-                {REJECT_REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {REJECT_REASON_LABELS[r]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Select
+              id="bulk-reason"
+              label="Reason for all selected"
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value as RejectReason)}
+              options={REJECT_REASONS.map((r) => ({ value: r, label: REJECT_REASON_LABELS[r] ?? r }))}
+            />
             {selectedCount > 50 ? <p className="small">Only the first 50 are rejected at a time.</p> : null}
           </ConfirmButton>
         </div>
@@ -292,22 +303,25 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
 
       {items.length > 0 ? (
         <div className="row">
-          <button
-            type="button"
-            className="btn btn-ghost"
+          <Button
+            variant="ghost"
             onClick={() => setSelected(selectedCount === items.length ? new Set() : new Set(items.slice(0, 50).map((i) => i.id)))}
           >
             {selectedCount === items.length ? 'Unselect all' : 'Select all shown (max 50)'}
-          </button>
+          </Button>
         </div>
-      ) : null}
+      ) : (
+        <EmptyState title="Queue is clear" icon={<IconCheckCircle />}>
+          No student posts are waiting for review. New posts show up here as soon as their photos finish uploading.
+        </EmptyState>
+      )}
 
       <ol className="stack-lg" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {items.map((item, index) => {
           const isFocused = index === focus;
           const isBusy = busy.has(item.id);
           const title = `${categoryLabel(item.category)} ${item.publicId ?? ''}`.trim();
-          const chips = chipsFor(item.flags, item.screeningStatus);
+          const flags = chipsFor(item.flags, item.screeningStatus).map((c) => c.key);
           const rejections = item.deviceRejections30d;
           return (
             <li key={item.id}>
@@ -317,87 +331,97 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
                   else cards.current.delete(item.id);
                 }}
                 tabIndex={-1}
-                className="card stack"
+                className="card stack review-card"
+                data-focused={isFocused ? 'true' : undefined}
                 aria-labelledby={`q-${item.id}`}
                 aria-busy={isBusy}
                 onFocusCapture={() => setFocus(index)}
-                style={{ borderColor: isFocused ? 'var(--focus)' : undefined, borderWidth: isFocused ? 2 : undefined }}
               >
                 {item.quarantine ? (
-                  <div className="notice notice-danger" role="alert">
-                    <strong>Quarantined by automated screening.</strong> {canSeeQuarantine ? 'Do not download or share it. Follow the district incident contact tree before acting.' : 'Ask a school admin.'}
-                  </div>
+                  <Notice tone="danger" live="assertive" title="Quarantined by automated screening.">
+                    {canSeeQuarantine ? 'Do not download or share it. Follow the district incident contact tree before acting.' : 'Ask a school admin.'}
+                  </Notice>
                 ) : null}
                 <div className="spread">
-                  <h2 id={`q-${item.id}`} style={{ fontSize: '1.1rem', margin: 0 }}>
+                  <h2 id={`q-${item.id}`} className="review-card-title">
+                    <CategoryIcon category={item.category} size={22} />
                     {categoryLabel(item.category)} <span className="mono small muted">{item.publicId}</span>
                   </h2>
-                  <label className="row small">
+                  <label className="choice small" style={{ minHeight: 0, padding: 0 }}>
                     <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} aria-label={`Select ${title} for bulk reject`} />
-                    Select
+                    <span>Select</span>
                   </label>
                 </div>
-                <p className="small muted" style={{ margin: 0 }}>
-                  Posted {fmtDateTime(item.createdAt, tz)} ({fmtAge(item.createdAt, nowMs)} ago) by {item.postedByKind === 'student' ? 'a student' : 'staff'}
+                <p className="small muted with-icon" style={{ margin: 0, whiteSpace: 'normal' }}>
+                  <IconClock size={16} />
+                  <span>
+                    Posted {fmtDateTime(item.createdAt, tz)} ({fmtAge(item.createdAt, nowMs)} ago) by {item.postedByKind === 'student' ? 'a student' : 'staff'}
+                  </span>
                 </p>
-                {chips.length > 0 ? (
+                {flags.length > 0 ? (
                   <ul className="chips" aria-label="Screening flags" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {chips.map((c) => (
-                      <li key={c.key} className={badgeClass(c.tone)}>
-                        {c.label}
+                    {flags.map((f) => (
+                      <li key={f}>
+                        <FlagChip flag={f} />
                       </li>
                     ))}
                   </ul>
                 ) : null}
                 <div className="grid-wide">
                   <ItemPhotos code={code} item={item} blurred={item.quarantine} />
-                  <dl className="stack small" style={{ margin: 0 }}>
-                    <div>
-                      <dt className="label">Description (public after approval)</dt>
-                      <dd style={{ margin: 0 }}>{item.description ?? <span className="muted">None</span>}</dd>
-                    </div>
-                    <div>
-                      <dt className="label">Finder's location note (staff only)</dt>
-                      <dd style={{ margin: 0 }}>{item.note ?? <span className="muted">None</span>}</dd>
-                    </div>
-                    <div>
-                      <dt className="label">Exact pin (staff only)</dt>
-                      <dd style={{ margin: 0 }}>
-                        <ItemPin code={code} pin={item.pin} mapVersionId={item.mapVersionId} activeMap={meta?.map ?? null} canReadMaps={canReadMaps} label={title} />
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="label">Public zone</dt>
-                      <dd style={{ margin: 0 }}>{item.zoneName ?? <span className="muted">None</span>}</dd>
-                    </div>
-                    <div>
-                      <dt className="label">Drop-off</dt>
-                      <dd style={{ margin: 0 }}>{locationName(item.dropoffLocationId)}</dd>
-                    </div>
-                    <div>
-                      <dt className="label">Device rejections, last 30 days</dt>
-                      <dd style={{ margin: 0 }}>
-                        {rejections === null ? (
-                          <span className="muted">Not applicable</span>
-                        ) : (
-                          <span className={rejections >= 3 ? 'badge badge-danger' : rejections > 0 ? 'badge badge-warn' : 'badge'}>{rejections}</span>
-                        )}
-                      </dd>
-                    </div>
+                  <dl className="kv kv-stacked small">
+                    <dt>Description (public after approval)</dt>
+                    <dd>{item.description ?? <span className="muted">None</span>}</dd>
+                    <dt>
+                      Finder's location note <PrivateNote>Staff only</PrivateNote>
+                    </dt>
+                    <dd>{item.note ?? <span className="muted">None</span>}</dd>
+                    <dt>
+                      Exact pin <PrivateNote>Staff only</PrivateNote>
+                    </dt>
+                    <dd>
+                      <ItemPin code={code} pin={item.pin} mapVersionId={item.mapVersionId} activeMap={meta?.map ?? null} canReadMaps={canReadMaps} label={title} />
+                    </dd>
+                    <dt>Public zone</dt>
+                    <dd>{item.zoneName ?? <span className="muted">None</span>}</dd>
+                    <dt>Drop-off</dt>
+                    <dd>{locationName(item.dropoffLocationId)}</dd>
+                    <dt>Device rejections, last 30 days</dt>
+                    <dd>
+                      {rejections === null ? (
+                        <span className="muted">Not applicable</span>
+                      ) : (
+                        <Badge tone={rejections >= 3 ? 'danger' : rejections > 0 ? 'warn' : 'neutral'} icon={rejections > 0 ? <IconAlert /> : undefined}>
+                          {rejections}
+                        </Badge>
+                      )}
+                    </dd>
                   </dl>
                 </div>
-                <div className="row">
-                  <button type="button" className="btn btn-primary" disabled={isBusy} onClick={() => void approve(item)}>
-                    Approve <kbd aria-hidden="true">A</kbd>
-                  </button>
-                  <button type="button" className="btn" disabled={isBusy} aria-expanded={panel?.id === item.id && panel.kind === 'edit'} onClick={() => setPanel({ id: item.id, kind: 'edit' })}>
-                    Approve with edits <kbd aria-hidden="true">E</kbd>
-                  </button>
-                  <button type="button" className="btn btn-danger" disabled={isBusy} aria-expanded={panel?.id === item.id && panel.kind === 'reject'} onClick={() => setPanel({ id: item.id, kind: 'reject' })}>
-                    Reject <kbd aria-hidden="true">R</kbd>
-                  </button>
-                  <a className="btn btn-ghost" href={`/staff/${code}/items/${item.id}`}>
+                <div className="button-row review-actions">
+                  <Button variant="primary" disabled={isBusy} onClick={() => void approve(item)} icon={<IconCheck />}>
+                    Approve <Kbd aria-hidden="true">A</Kbd>
+                  </Button>
+                  <Button
+                    disabled={isBusy}
+                    aria-expanded={panel?.id === item.id && panel.kind === 'edit'}
+                    onClick={() => setPanel({ id: item.id, kind: 'edit' })}
+                    icon={<IconPencil />}
+                  >
+                    Approve with edits <Kbd aria-hidden="true">E</Kbd>
+                  </Button>
+                  <Button
+                    variant="danger-outline"
+                    disabled={isBusy}
+                    aria-expanded={panel?.id === item.id && panel.kind === 'reject'}
+                    onClick={() => setPanel({ id: item.id, kind: 'reject' })}
+                    icon={<IconX />}
+                  >
+                    Reject <Kbd aria-hidden="true">R</Kbd>
+                  </Button>
+                  <a className={buttonClass({ variant: 'ghost' })} href={`/staff/${code}/items/${item.id}`}>
                     Open item
+                    <IconArrowRight />
                   </a>
                 </div>
                 {panel?.id === item.id && panel.kind === 'edit' ? (
@@ -432,9 +456,9 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
 
       {cursor ? (
         <div className="stack">
-          <button type="button" className="btn" disabled={loadingMore} onClick={() => void loadMore()}>
+          <Button disabled={loadingMore} onClick={() => void loadMore()} icon={<IconChevronDown />}>
             {loadingMore ? 'Loading...' : 'Load more'}
-          </button>
+          </Button>
           <ActionError error={moreError} />
         </div>
       ) : null}

@@ -183,6 +183,7 @@ export function TextInput({
           type={type}
           className={cx('input', className)}
           aria-describedby={describedBy(p['aria-describedby'], input['aria-describedby'])}
+          aria-invalid={p['aria-invalid'] ?? input['aria-invalid']}
         />
       )}
     </Field>

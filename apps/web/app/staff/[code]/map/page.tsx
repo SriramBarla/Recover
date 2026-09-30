@@ -1,6 +1,7 @@
 // /staff/[code]/map: map versions, draft upload through the worker broker, zones, and submission for
 // district approval (§5.5; §24 steps 2-3; G-07).
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { MapEditor } from '@/components/staff/MapEditor.tsx';
 import { mapVersionsOf } from '@/components/staff/shapes.ts';
@@ -19,13 +20,8 @@ export default async function MapPage({ params }: PageProps<'/staff/[code]/map'>
 
   return (
     <>
-      <div className="stack">
-        <h1>Campus map</h1>
-        <p className="muted">
-          Students pin found items on the district-approved public map and see only zone names, never exact pins. Drafts stay private until the district
-          activates them.
-        </p>
-      </div>
+      <PageHeader title={<>Campus map</>} description={<>Students pin found items on the district-approved public map and see only zone names, never exact pins. Drafts stay private until the district
+          activates them.</>} />
       {versions.ok ? (
         <MapEditor code={code} versions={versions.data} tz={meta?.timezone ?? null} />
       ) : (

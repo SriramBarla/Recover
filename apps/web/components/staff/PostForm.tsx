@@ -8,7 +8,15 @@ import { ApiError, newKey, staffApi } from './client-api.ts';
 import { STAFF_POST_CATEGORIES } from './constants.ts';
 import { categoryLabel } from './format.ts';
 import { PhotoPrepError, putWithRetry, toJpeg } from './image-prep.ts';
-import { MapCanvas, type Point } from './MapCanvas.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconCamera, IconCheck, IconRefresh, IconUpload, IconX } from '@/components/ui/icons.tsx';
+import type { MapPoint as Point } from '@/components/ui/map-geometry.ts';
+import { MapPicker } from '@/components/ui/map-picker.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
+import { Stat, StatGrid } from '@/components/ui/stat.tsx';
+import { TextArea } from '@/components/ui/text-area.tsx';
 
 type Props = { code: string; mode: 'staff' | 'backfill'; meta: StaffMeta | null };
 type Pending = { itemId: string; publicId: string; uploads: UploadSpec[]; blobs: Blob[] };
@@ -177,88 +185,83 @@ export function PostForm({ code, mode, meta }: Props) {
   const highValue = category !== '' && HIGH_VALUE_CATEGORIES.includes(category);
 
   return (
-    <div className="stack-lg">
+    <div className="stack-lg" style={{ maxWidth: '48rem' }}>
       {backfill ? (
-        <div className="kpis" aria-label="Backfill session">
-          <div className="kpi">
-            <div className="value">{log.length}</div>
-            <div className="label">Items this session</div>
-          </div>
-          <div className="kpi">
-            <div className="value">{lastHour}</div>
-            <div className="label">In the last hour</div>
-          </div>
-          <div className="kpi">
-            <div className="value">{rate}</div>
-            <div className="label">Items per hour</div>
-          </div>
-          <div className="kpi">
-            <button
-              type="button"
-              className="btn btn-ghost"
+        <StatGrid label="Backfill session">
+          <Stat value={log.length} label="Items this session" />
+          <Stat value={lastHour} label="In the last hour" />
+          <Stat value={rate} label="Items per hour" />
+          <div className="kpi" style={{ display: 'grid', placeItems: 'center' }}>
+            <Button
+              variant="ghost"
+              icon={<IconRefresh />}
               onClick={() => {
                 writeStore(logKey, []);
                 setLog([]);
               }}
             >
               Reset counter
-            </button>
+            </Button>
           </div>
-        </div>
+        </StatGrid>
       ) : null}
 
       <p className="visually-hidden" role="status" aria-live="polite">
         {busy ? STAGE_TEXT[stage] : last ? `Posted ${last.publicId}.` : ''}
       </p>
       {last ? (
-        <div className="notice notice-ok">
+        <Notice tone="success">
           Posted <strong className="mono">{last.publicId}</strong>. It is published after photo processing and screening.{' '}
           <a href={`/staff/${code}/items/${last.itemId}`}>Open item</a>
-        </div>
+        </Notice>
       ) : null}
 
-      <form onSubmit={submit} className="card stack-lg" aria-label={backfill ? 'Backfill item' : 'Post a found item'}>
+      <form onSubmit={submit} className="card card-pad-lg stack-lg" aria-label={backfill ? 'Backfill item' : 'Post a found item'}>
         <fieldset className="stack" disabled={busy || pending !== null} style={{ border: 0, padding: 0, margin: 0 }}>
-          <label className="field">
-            <span className="label">Category</span>
-            <select className="select" required value={category} onChange={(e) => setCategory(e.target.value as Category)}>
-              <option value="" disabled>
-                Choose a category
+          <Select
+            id="post-category"
+            label="Category"
+            required
+            value={category}
+            onChange={(e) => setCategory(e.target.value as Category)}
+            hint={
+              highValue
+                ? 'High-value item: use a plain photo and generic text (for example "black phone"). Keep serial numbers, names, and other proof-of-ownership details out of view.'
+                : 'ID cards and medication are handled at the office and are not posted.'
+            }
+          >
+            <option value="" disabled>
+              Choose a category
+            </option>
+            {STAFF_POST_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {categoryLabel(c)}
               </option>
-              {STAFF_POST_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {categoryLabel(c)}
-                </option>
-              ))}
-            </select>
-            {highValue ? (
-              <span className="hint">High-value item: use a plain photo and generic text (for example "black phone"). Keep serial numbers, names, and other proof-of-ownership details out of view.</span>
-            ) : (
-              <span className="hint">ID cards and medication are handled at the office and are not posted.</span>
-            )}
-          </label>
-          <label className="field">
-            <span className="label">Description (public)</span>
-            <input className="input" required minLength={2} maxLength={120} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="navy metal water bottle" />
-            <span className="hint">{description.length}/120. Describe the item, not the owner. No names or contact details.</span>
-          </label>
-          <label className="field">
-            <span className="label">{backfill ? 'Shelf location (kept for this session)' : 'Where is it now?'}</span>
-            <select className="select" required value={locationId} onChange={(e) => pickLocation(e.target.value)}>
-              <option value="" disabled>
-                Choose a location
+            ))}
+          </Select>
+          <TextArea
+            id="post-description"
+            label="Description (public)"
+            hint="Describe the item, not the owner. No names or contact details."
+            required
+            minLength={2}
+            maxLength={120}
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="navy metal water bottle"
+          />
+          <Select id="post-location" label={backfill ? 'Shelf location (kept for this session)' : 'Where is it now?'} required value={locationId} onChange={(e) => pickLocation(e.target.value)}>
+            <option value="" disabled>
+              Choose a location
+            </option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
               </option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">Staff-only note (optional)</span>
-            <input className="input" maxLength={80} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Found in C214" />
-          </label>
+            ))}
+          </Select>
+          <TextInput id="post-note" label="Staff-only note" optional privateNote="Staff only" maxLength={80} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Found in C214" />
 
           <div className="stack">
             <span className="label">Photos (1 to 3)</span>
@@ -270,8 +273,9 @@ export function PostForm({ code, mode, meta }: Props) {
                     {f ? (
                       <>
                         <img src={f.url} alt={`Photo ${i + 1} preview`} />
-                        <button type="button" className="btn" style={{ position: 'absolute', bottom: 4, right: 4 }} onClick={() => removeFile(i)} aria-label={`Remove photo ${i + 1}`}>
-                          Remove
+                        <button type="button" className="btn btn-sm btn-secondary photo-remove" onClick={() => removeFile(i)} aria-label={`Remove photo ${i + 1}`}>
+                          <IconX />
+                          <span className="btn-label">Remove</span>
                         </button>
                       </>
                     ) : (
@@ -283,6 +287,7 @@ export function PostForm({ code, mode, meta }: Props) {
             </div>
             <div className="row">
               <label className="btn">
+                <IconCamera />
                 Take photo
                 <input
                   className="visually-hidden"
@@ -297,6 +302,7 @@ export function PostForm({ code, mode, meta }: Props) {
                 />
               </label>
               <label className="btn">
+                <IconUpload />
                 Choose files
                 <input
                   className="visually-hidden"
@@ -318,14 +324,22 @@ export function PostForm({ code, mode, meta }: Props) {
             <div className="stack">
               <span className="label">Where it was found (optional, staff only)</span>
               {meta?.map?.url ? (
-                <>
-                  <MapCanvas src={meta.map.url} alt="Campus map" width={meta.map.width} height={meta.map.height} zones={meta.zones} picked={pin} onPick={setPin} pickLabel="found location" maxWidth="36rem" />
-                  {pin ? (
-                    <button type="button" className="btn btn-ghost" onClick={() => setPin(null)}>
-                      Clear pin
-                    </button>
-                  ) : null}
-                </>
+                <div style={{ maxWidth: '36rem' }}>
+                  <MapPicker
+                    src={meta.map.url}
+                    width={meta.map.width}
+                    height={meta.map.height}
+                    zones={meta.zones}
+                    value={pin}
+                    onChange={(p) => setPin(p)}
+                    label="Campus map. Choose a found location location."
+                    help="Click the map, or focus it and use the arrow keys (Shift for bigger steps) then Enter. You can also type the position below."
+                    clearable
+                    coordinateInputs
+                    showCoordinates
+                    pointLabel="found location"
+                  />
+                </div>
               ) : (
                 <p className="muted small">This school has no active map yet, so items are posted without a pin.</p>
               )}
@@ -334,13 +348,13 @@ export function PostForm({ code, mode, meta }: Props) {
         </fieldset>
 
         <div className="row">
-          <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>
+          <Button type="submit" variant="primary" size="lg" disabled={busy} icon={busy ? <span className="btn-spinner" aria-hidden="true" /> : <IconCheck />}>
             {busy ? STAGE_TEXT[stage] : pending ? 'Retry upload' : backfill ? 'Post and next' : 'Post item'}
-          </button>
+          </Button>
           {pending && !busy ? (
-            <button type="button" className="btn btn-ghost" onClick={reset}>
+            <Button variant="ghost" onClick={reset}>
               Start over
-            </button>
+            </Button>
           ) : null}
         </div>
         {pending && !busy ? (

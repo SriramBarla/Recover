@@ -33,6 +33,8 @@ export type ItemCardProps = {
   // so they stay separately clickable and the markup stays valid (the link wraps only the title).
   actions?: ReactNode;
   priority?: boolean;
+  // Feeds pass false: a grid of 30 cards must not become 30 prefetches during dismissal peaks.
+  prefetch?: boolean;
   headingLevel?: 2 | 3 | 4;
   variant?: 'grid' | 'row';
   as?: 'article' | 'li' | 'div';
@@ -79,6 +81,7 @@ export function ItemCard({
   status,
   actions,
   priority = false,
+  prefetch,
   headingLevel = 3,
   variant = 'grid',
   as: Tag = 'div',
@@ -113,7 +116,7 @@ export function ItemCard({
       <div className="body">
         <H className="desc">
           {href ? (
-            <Link className="item-card-link" href={href}>
+            <Link className="item-card-link" href={href} prefetch={prefetch}>
               {description}
             </Link>
           ) : (

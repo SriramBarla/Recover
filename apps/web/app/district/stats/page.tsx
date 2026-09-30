@@ -1,6 +1,7 @@
 // /district/stats: adoption, recovery, queue age, abuse, and cost drivers per school (§5.6, §17),
 // printable as the weekly report.
 import type { Metadata } from 'next';
+import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { PrintButton } from '@/components/staff/PrintButton.tsx';
 import { RangeForm } from '@/components/staff/RangeForm.tsx';
@@ -23,15 +24,15 @@ export default async function DistrictStats({ searchParams }: PageProps<'/distri
 
   return (
     <>
-      <div className="spread">
-        <div className="stack">
-          <h1>District stats</h1>
-          <p className="muted">
+      <PageHeader
+        title={<>District stats</>}
+        description={
+          <>
             {range.from} to {range.to}
-          </p>
-        </div>
-        <PrintButton />
-      </div>
+          </>
+        }
+        actions={<PrintButton />}
+      />
       <RangeForm from={range.from} to={range.to} />
       {stats.ok ? <StatsView data={stats.data} /> : <ErrorNotice code={stats.code} what="Stats" signinHref={signinPath('/district/stats')} />}
     </>

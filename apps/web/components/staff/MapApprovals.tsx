@@ -2,11 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge.tsx';
+import { EmptyState } from '@/components/ui/empty-state.tsx';
+import { IconMap, IconMapPin } from '@/components/ui/icons.tsx';
+import { MapPicker } from '@/components/ui/map-picker.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { Select } from '@/components/ui/select.tsx';
 import { staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
 import { MAP_REJECT_REASONS } from './constants.ts';
 import { MAP_REJECT_REASON_LABELS, fmtDateTime } from './format.ts';
-import { MapCanvas } from './MapCanvas.tsx';
 import type { PendingMap } from './shapes.ts';
 
 // District safety review of submitted maps (§5.6, G-07). The preview streams through a map.read
@@ -16,7 +21,12 @@ export function MapApprovals({ maps }: { maps: PendingMap[] }) {
   const router = useRouter();
   const [done, setDone] = useState<Record<string, string>>({});
 
-  if (maps.length === 0) return <p className="muted">No maps are waiting for approval.</p>;
+  if (maps.length === 0)
+    return (
+      <EmptyState icon={<IconMap />} title="No maps are waiting for approval.">
+        Schools submit drafts from their Map page. They show up here for the safety review.
+      </EmptyState>
+    );
 
   return (
     <ul className="stack-lg" style={{ listStyle: 'none', padding: 0 }}>
@@ -42,13 +52,15 @@ function MapReview({ m, outcome, onDone }: { m: PendingMap; outcome: string | nu
   return (
     <article className="card stack" aria-labelledby={`map-${m.id}`}>
       <div className="spread">
-        <h2 id={`map-${m.id}`} style={{ fontSize: '1.15rem' }}>
+        <h2 id={`map-${m.id}`} className="review-card-title">
           {m.schoolName ?? code ?? 'School'} <span className="mono muted small">{code}</span>
         </h2>
         <span className="small muted">Submitted {fmtDateTime(m.submittedAt)}</span>
       </div>
       {code ? (
-        <MapCanvas src={`/api/staff/${code}/maps/${m.id}/image`} alt={`Submitted map for ${m.schoolName ?? code}`} width={m.width} height={m.height} zones={m.zones} maxWidth="56rem" />
+        <div style={{ maxWidth: '56rem' }}>
+          <MapPicker src={`/api/staff/${code}/maps/${m.id}/image`} width={m.width} height={m.height} zones={m.zones} showZones readOnly value={null} label={`Submitted map for ${m.schoolName ?? code}`} />
+        </div>
       ) : (
         <p className="muted">Preview unavailable: the school code is missing.</p>
       )}
@@ -59,8 +71,8 @@ function MapReview({ m, outcome, onDone }: { m: PendingMap; outcome: string | nu
         ) : (
           <ul className="chips" style={{ listStyle: 'none', padding: 0 }}>
             {m.zones.map((z) => (
-              <li key={z.id} className="badge">
-                {z.name}
+              <li key={z.id}>
+                <Badge icon={<IconMapPin />}>{z.name}</Badge>
               </li>
             ))}
           </ul>
@@ -68,9 +80,9 @@ function MapReview({ m, outcome, onDone }: { m: PendingMap; outcome: string | nu
         <p className="hint">Check that no label names a restroom, the clinic, counseling, a special program room, or a security area.</p>
       </div>
       {outcome ? (
-        <div className="notice notice-ok" role="status">
+        <Notice tone="success" live="polite">
           {outcome}
-        </div>
+        </Notice>
       ) : (
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <ConfirmButton
@@ -94,19 +106,16 @@ function MapReview({ m, outcome, onDone }: { m: PendingMap; outcome: string | nu
               onDone('Sent back to the school.');
             }}
           >
-            <label className="field">
-              <span className="label">Reason</span>
-              <select className="select" value={reason} onChange={(e) => setReason(e.target.value as (typeof MAP_REJECT_REASONS)[number])}>
-                <option value="" disabled>
-                  Choose a reason
+            <Select id={`map-reason-${m.id}`} label="Reason" value={reason} onChange={(e) => setReason(e.target.value as (typeof MAP_REJECT_REASONS)[number])}>
+              <option value="" disabled>
+                Choose a reason
+              </option>
+              {MAP_REJECT_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {MAP_REJECT_REASON_LABELS[r]}
                 </option>
-                {MAP_REJECT_REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {MAP_REJECT_REASON_LABELS[r]}
-                  </option>
-                ))}
-              </select>
-            </label>
+              ))}
+            </Select>
           </ConfirmButton>
         </div>
       )}

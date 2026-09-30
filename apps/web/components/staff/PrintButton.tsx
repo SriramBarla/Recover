@@ -1,10 +1,13 @@
 'use client';
 
+import { Button } from '@/components/ui/button.tsx';
+import { IconPrinter } from '@/components/ui/icons.tsx';
+
 // The weekly report is the dashboard page itself, printed or saved as PDF from the browser (§17).
 export function PrintButton() {
   return (
-    <button type="button" className="btn" onClick={() => window.print()}>
+    <Button className="no-print" onClick={() => window.print()} icon={<IconPrinter />}>
       Print or save as PDF
-    </button>
+    </Button>
   );
 }

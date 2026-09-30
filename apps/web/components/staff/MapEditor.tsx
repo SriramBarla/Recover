@@ -2,11 +2,18 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button.tsx';
+import { TextInput } from '@/components/ui/field.tsx';
+import { IconCheck, IconMap, IconPencil, IconPlus, IconUpload } from '@/components/ui/icons.tsx';
+import type { MapPoint as Point } from '@/components/ui/map-geometry.ts';
+import { MapPicker } from '@/components/ui/map-picker.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
+import { StatusBadge } from '@/components/ui/status-badge.tsx';
+import { Table } from '@/components/ui/table.tsx';
 import { ActionError } from './ActionError.tsx';
 import { ApiError, staffApi } from './client-api.ts';
 import { ConfirmButton } from './ConfirmButton.tsx';
 import { MAP_REJECT_REASON_LABELS, fmtDateTime, label } from './format.ts';
-import { MapCanvas, type Point } from './MapCanvas.tsx';
 import type { MapVersionRow, ZoneRow } from './shapes.ts';
 
 type Props = { code: string; versions: MapVersionRow[]; tz: string | null };
@@ -53,48 +60,52 @@ export function MapEditor({ code, versions, tz }: Props) {
       <p className="visually-hidden" role="status" aria-live="polite">
         {notice}
       </p>
-      {notice ? <div className="notice notice-ok">{notice}</div> : null}
+      {notice ? <Notice tone="success">{notice}</Notice> : null}
       <section className="stack" aria-labelledby="versions-h">
         <div className="spread">
-          <h2 id="versions-h">Map versions</h2>
-          <button type="button" className="btn" disabled={busy} onClick={() => void createDraft()}>
+          <h2 id="versions-h" className="with-icon">
+            <IconMap />
+            Map versions
+          </h2>
+          <Button disabled={busy} onClick={() => void createDraft()} icon={<IconPlus />}>
             New draft
-          </button>
+          </Button>
         </div>
         <ActionError error={error} />
         {versions.length === 0 ? (
           <p className="muted">No map yet. Create a draft to start.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">Created</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Size</th>
-                  <th scope="col">Zones</th>
-                  <th scope="col">Open</th>
+          <Table caption="Map versions" hideCaption>
+            <thead>
+              <tr>
+                <th scope="col">Created</th>
+                <th scope="col">Status</th>
+                <th scope="col">Size</th>
+                <th scope="col">Zones</th>
+                <th scope="col">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((v) => (
+                <tr key={v.id} aria-current={v.id === selectedId ? 'true' : undefined}>
+                  <td>{fmtDateTime(v.createdAt, tz)}</td>
+                  <td>
+                    <span className="chips">
+                      <StatusBadge kind="map" status={v.approvalStatus} label={label(STATUS_LABELS, v.approvalStatus)} />
+                      {v.active ? <StatusBadge kind="publication" status="published" label="Active" /> : null}
+                    </span>
+                  </td>
+                  <td>{v.width && v.height ? `${v.width} x ${v.height}` : <span className="muted">Not processed</span>}</td>
+                  <td>{v.zones.length}</td>
+                  <td>
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedId(v.id)} aria-pressed={v.id === selectedId}>
+                      {v.id === selectedId ? 'Open' : 'View'}
+                    </Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {versions.map((v) => (
-                  <tr key={v.id} aria-current={v.id === selectedId ? 'true' : undefined}>
-                    <td>{fmtDateTime(v.createdAt, tz)}</td>
-                    <td>
-                      {label(STATUS_LABELS, v.approvalStatus)} {v.active ? <span className="badge badge-ok">Active</span> : null}
-                    </td>
-                    <td>{v.width && v.height ? `${v.width} x ${v.height}` : <span className="muted">Not processed</span>}</td>
-                    <td>{v.zones.length}</td>
-                    <td>
-                      <button type="button" className="btn btn-ghost" onClick={() => setSelectedId(v.id)} aria-pressed={v.id === selectedId}>
-                        {v.id === selectedId ? 'Open' : 'View'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </Table>
         )}
       </section>
       {selected ? <VersionPanel key={selected.id} code={code} v={selected} tz={tz} onChanged={(m) => { setNotice(m); router.refresh(); }} /> : null}
@@ -113,8 +124,10 @@ function VersionPanel({ code, v, tz, onChanged }: { code: string; v: MapVersionR
   return (
     <section className="card stack-lg" aria-labelledby="version-h">
       <div className="stack">
-        <h2 id="version-h">
-          {label(STATUS_LABELS, v.approvalStatus)} version {v.active ? <span className="badge badge-ok">Active</span> : null}
+        <h2 id="version-h" className="review-card-title">
+          {label(STATUS_LABELS, v.approvalStatus)} version
+          <StatusBadge kind="map" status={v.approvalStatus} label={label(STATUS_LABELS, v.approvalStatus)} />
+          {v.active ? <StatusBadge kind="publication" status="published" label="Active" /> : null}
         </h2>
         <p className="small muted" style={{ margin: 0 }}>
           Created {fmtDateTime(v.createdAt, tz)}
@@ -122,71 +135,83 @@ function VersionPanel({ code, v, tz, onChanged }: { code: string; v: MapVersionR
           {v.approvedAt ? `; approved ${fmtDateTime(v.approvedAt, tz)}` : ''}
         </p>
         {v.approvalStatus === 'rejected' ? (
-          <div className="notice notice-warn">
+          <Notice tone="warning">
             The district sent this version back{v.rejectedReason ? `: ${label(MAP_REJECT_REASON_LABELS, v.rejectedReason)}` : '.'} Create a new draft with the changes.
-          </div>
+          </Notice>
         ) : null}
         {!draft ? <p className="hint">Only drafts can change. Zones on this version are frozen.</p> : null}
       </div>
 
       {draft ? <UploadImage code={code} versionId={v.id} onDone={() => onChanged('Uploaded. The image is processed in the background; refresh in a minute.')} /> : null}
 
-      <MapCanvas
-        src={src}
-        alt="Campus map draft"
-        width={v.width}
-        height={v.height}
-        zones={v.zones}
-        picked={draft ? center : null}
-        onPick={draft && processed ? setCenter : undefined}
-        pickLabel="zone center"
-        maxWidth="56rem"
-      />
+      {src ? (
+        <div style={{ maxWidth: '56rem' }}>
+          <MapPicker
+            src={src}
+            width={v.width}
+            height={v.height}
+            zones={v.zones.filter((z) => z.active)}
+            showZones
+            value={draft ? center : null}
+            onChange={draft && processed ? (p) => setCenter(p) : undefined}
+            readOnly={!(draft && processed)}
+            label={draft && processed ? 'Campus map draft. Choose a zone center location.' : 'Campus map draft'}
+            help="Click the map, or focus it and use the arrow keys (Shift for bigger steps) then Enter. You can also type the position below."
+            coordinateInputs
+            showCoordinates
+            pointLabel="zone center"
+          />
+        </div>
+      ) : (
+        <p className="muted small">No map image available.</p>
+      )}
       {draft && !processed ? <p className="hint">Zones can be drawn once the uploaded image has been processed.</p> : null}
 
       <div className="stack">
-        <h3>Zones ({v.zones.length})</h3>
+        <h3 className="with-icon">
+          <IconMap />
+          Zones ({v.zones.length})
+        </h3>
         <p className="hint">Zone names are public labels, so leave restrooms, the clinic, counseling, and other sensitive rooms out.</p>
         {v.zones.length > 0 ? (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Center</th>
-                  <th scope="col">Radius</th>
-                  <th scope="col">Status</th>
-                  {draft ? <th scope="col">Edit</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {v.zones.map((z) => (
-                  <tr key={z.id}>
-                    <td>{z.name}</td>
-                    <td className="small">
-                      {(z.cx * 100).toFixed(1)}%, {(z.cy * 100).toFixed(1)}%
+          <Table caption="Zones" hideCaption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Center</th>
+                <th scope="col">Radius</th>
+                <th scope="col">Status</th>
+                {draft ? <th scope="col">Edit</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {v.zones.map((z) => (
+                <tr key={z.id}>
+                  <td>{z.name}</td>
+                  <td className="small">
+                    {(z.cx * 100).toFixed(1)}%, {(z.cy * 100).toFixed(1)}%
+                  </td>
+                  <td className="small">{(z.radius * 100).toFixed(1)}%</td>
+                  <td>{z.active ? <StatusBadge kind="member" status="active" /> : <StatusBadge kind="member" status="deactivated" label="Off" />}</td>
+                  {draft ? (
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<IconPencil />}
+                        onClick={() => {
+                          setZone(z);
+                          setCenter({ x: z.cx, y: z.cy });
+                        }}
+                      >
+                        Edit
+                      </Button>
                     </td>
-                    <td className="small">{(z.radius * 100).toFixed(1)}%</td>
-                    <td>{z.active ? 'Active' : 'Off'}</td>
-                    {draft ? (
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => {
-                            setZone(z);
-                            setCenter({ x: z.cx, y: z.cy });
-                          }}
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </Table>
         ) : (
           <p className="muted">No zones yet.</p>
         )}
@@ -272,13 +297,16 @@ function UploadImage({ code, versionId, onDone }: { code: string; versionId: str
   return (
     <form onSubmit={upload} className="stack" aria-label="Upload map image">
       <h3>Map image</h3>
-      <label className="field">
-        <span className="label">PNG or JPEG, at most 4 MB, at least {MIN_WIDTH} px wide</span>
-        <input className="input" type="file" accept="image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      </label>
-      <button type="submit" className="btn btn-primary" disabled={!file || busy}>
+      <TextInput
+        id={`map-file-${versionId}`}
+        label={`PNG or JPEG, at most 4 MB, at least ${MIN_WIDTH} px wide`}
+        type="file"
+        accept="image/png,image/jpeg"
+        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+      />
+      <Button type="submit" variant="primary" disabled={!file || busy} icon={<IconUpload />}>
         {busy ? 'Uploading...' : 'Upload image'}
-      </button>
+      </Button>
       <ActionError error={error} />
     </form>
   );
@@ -326,34 +354,37 @@ function ZoneForm({
   };
 
   return (
-    <form onSubmit={save} className="stack" aria-label={zone ? `Edit zone ${zone.name}` : 'Add zone'} style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+    <form onSubmit={save} className="stack review-panel" aria-label={zone ? `Edit zone ${zone.name}` : 'Add zone'}>
       <h4 style={{ margin: 0 }}>{zone ? `Edit ${zone.name}` : 'Add a zone'}</h4>
       <p className="hint">Pick the center on the map above (click, or arrow keys and Enter, or type the position).</p>
       <div className="grid">
-        <label className="field">
-          <span className="label">Public name</span>
-          <input className="input" required minLength={2} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="Gym lobby" />
-        </label>
-        <label className="field">
-          <span className="label">Radius (% of map width)</span>
-          <input className="input" type="number" min={0.5} max={50} step={0.5} value={radiusPct} onChange={(e) => setRadiusPct(Number(e.target.value))} />
-        </label>
+        <TextInput id={`zone-name-${zone?.id ?? 'new'}`} label="Public name" required minLength={2} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="Gym lobby" />
+        <TextInput
+          id={`zone-radius-${zone?.id ?? 'new'}`}
+          label="Radius (% of map width)"
+          type="number"
+          min={0.5}
+          max={50}
+          step={0.5}
+          value={radiusPct}
+          onChange={(e) => setRadiusPct(Number(e.target.value))}
+        />
       </div>
-      <label className="row">
+      <label className="choice">
         <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-        Active
+        <span>Active</span>
       </label>
       <p className="small muted" style={{ margin: 0 }}>
         Center: {center ? `${(center.x * 100).toFixed(1)}% across, ${(center.y * 100).toFixed(1)}% down` : 'not chosen'}
       </p>
       <div className="row">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy} icon={<IconCheck />}>
           {busy ? 'Saving...' : zone ? 'Save zone' : 'Add zone'}
-        </button>
+        </Button>
         {zone ? (
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+          <Button variant="ghost" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         ) : null}
       </div>
       <ActionError error={error} />
