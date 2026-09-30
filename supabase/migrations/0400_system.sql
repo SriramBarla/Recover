@@ -1699,8 +1699,8 @@ begin
                'reportCategoryNull', r.category is null,
                'foundAt', v_item.found_at, 'lostOn', r.lost_on,
                'sameMapVersion', x.same_map,
-               'dx', case when x.same_map then r.pin_x - v_item.pin_x end,
-               'dy', case when x.same_map then r.pin_y - v_item.pin_y end,
+               'dx', case when x.same_map then v_item.pin_x - r.pin_x end,  -- item pin minus report pin
+               'dy', case when x.same_map then v_item.pin_y - r.pin_y end,
                'mapWidth', case when x.same_map then mv.width_px end,
                'mapHeight', case when x.same_map then mv.height_px end) as pair
         from public.lost_reports r
@@ -1751,8 +1751,8 @@ begin
                'reportCategoryNull', v_report.category is null,
                'foundAt', i.found_at, 'lostOn', v_report.lost_on,
                'sameMapVersion', x.same_map,
-               'dx', case when x.same_map then v_report.pin_x - i.pin_x end,
-               'dy', case when x.same_map then v_report.pin_y - i.pin_y end,
+               'dx', case when x.same_map then i.pin_x - v_report.pin_x end,  -- item pin minus report pin
+               'dy', case when x.same_map then i.pin_y - v_report.pin_y end,
                'mapWidth', case when x.same_map then mv.width_px end,
                'mapHeight', case when x.same_map then mv.height_px end) as pair
         from public.visible_items i

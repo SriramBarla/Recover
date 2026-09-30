@@ -913,6 +913,85 @@ begin
                          'calendar horizon alert is school-scoped');
 end $$;
 
+-- The remaining §17 conditions, each driven past its threshold.
+do $$
+declare
+  fchs constant uuid := '0a0a0a0a-0000-4000-8000-000000000001';
+  it uuid;
+  r jsonb;
+begin
+  delete from public.rate_counters where action like 'alert.%';
+  -- queue age p95 > 24 h (school-scoped)
+  it := pg_temp.mk_item(fchs, 'student', 'pending', 'hidden', 'with_finder');
+  update public.items set created_at = now() - interval '30 days' where id = it;
+  -- deletion ledger unverified for more than 7 days: breach, not the lower levels
+  insert into public.media_deletion_ledger (school_id, item_id, reason, requested_at) values (fchs, it, 'pulled', now() - interval '8 days');
+  -- three failing readiness checks in a row (dated after anything cron may have written)
+  insert into public.health_checks (checked_at, ok) values (now() + interval '1 second', false),
+                                                        (now() + interval '2 seconds', false), (now() + interval '3 seconds', false);
+  -- screening budget above 80% of the ceiling
+  delete from public.rate_counters where tenant_scope = 'district' and action = 'screening';
+  insert into public.rate_counters (tenant_scope, action, subject_kind, subject_hmac, window_start, count)
+  values ('district', 'screening', 'district', '\x00', date_trunc('day', now(), 'UTC'),
+          (select screening_daily_ceiling * 9 / 10 from public.district_settings where id = 1));
+  -- storage reported by the worker above 70% of plan
+  perform pg_temp.w($q$select public.system_health_record('{"ok": false, "storagePct": 75, "egressPct": 10}')$q$);
+  -- no worker heartbeat for more than 10 minutes
+  delete from public.worker_heartbeats;
+  insert into public.worker_heartbeats (worker_id, seen_at) values ('old-worker', now() - interval '11 minutes');
+
+  r := pg_temp.w('select public.system_evaluate_alerts()');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.queue_age' and a.school_id = fchs
+                                   and a.created_at = now() and (a.metadata->>'p95Hours')::numeric > 24), 'alert.queue_age');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.deletion_unverified_breach' and a.created_at = now())
+                         and not exists (select 1 from public.audit_log a where a.created_at = now()
+                                           and a.action in ('alert.deletion_unverified_high', 'alert.deletion_unverified_warning')),
+                         'alert.deletion_unverified_breach replaces the lower levels');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.health_failing' and a.created_at = now()),
+                         'alert.health_failing after 3 failing checks');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.screening_budget' and a.created_at = now()),
+                         'alert.screening_budget over 80%');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.storage' and a.created_at = now())
+                         and not exists (select 1 from public.audit_log a where a.action = 'alert.egress' and a.created_at = now()),
+                         'alert.storage from the worker figures');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.worker_stale' and a.created_at = now()
+                                   and (a.metadata->>'heartbeatAgeS')::int >= 660), 'alert.worker_stale');
+  perform pg_temp.expect(not exists (select 1 from public.audit_log a where a.action like 'alert.%' and a.created_at = now()
+                                       and a.metadata::text ~* '(description|path|token|digest)'),
+                         'alert metadata carries figures only (F-74)');
+
+  -- no health row for 20 minutes
+  delete from public.rate_counters where action like 'alert.%';
+  delete from public.health_checks;
+  insert into public.health_checks (checked_at, ok) values (now() - interval '25 minutes', true);
+  r := pg_temp.w('select public.system_evaluate_alerts()');
+  perform pg_temp.expect(exists (select 1 from public.audit_log a where a.action = 'alert.health_gap' and a.created_at = now()
+                                   and (a.metadata->>'gapS')::int >= 1500), 'alert.health_gap');
+end $$;
+
+-- Claim cohorts of earlier days keep filling in as claims arrive (§17 cohort recovery).
+do $$
+declare
+  fchs constant uuid := '0a0a0a0a-0000-4000-8000-000000000001';
+  v_day date := (now() at time zone 'America/New_York')::date - 10;
+  it uuid;
+  v_before int;
+begin
+  insert into public.daily_school_stats (school_id, day) values (fchs, v_day) on conflict do nothing;
+  select received_cohort_7d into v_before from public.daily_school_stats where school_id = fchs and day = v_day;
+  it := pg_temp.mk_item(fchs, 'staff', 'approved', 'withdrawn', 'claimed');
+  update public.items
+     set received_at = (v_day::timestamp + interval '12 hours') at time zone 'America/New_York',
+         current_location_id = dropoff_location_id,
+         claimed_at = (v_day::timestamp + interval '36 hours') at time zone 'America/New_York',
+         terminal_at = (v_day::timestamp + interval '36 hours') at time zone 'America/New_York'
+   where id = it;
+  perform pg_temp.w(format('select public.system_rollup_daily_stats(%L)', (now() at time zone 'America/New_York')::date));
+  perform pg_temp.expect((select received_cohort_7d >= 1 and received_cohort_30d >= 1 and received_cohort_7d >= v_before
+                            from public.daily_school_stats where school_id = fchs and day = v_day),
+                         'rollup refreshes the claim cohorts of the previous 30 days');
+end $$;
+
 -- =====================================================================================================
 -- 7. Purges (14 retention table + BUILD-CONTRACT additions)
 -- =====================================================================================================
@@ -1127,7 +1206,7 @@ begin
                                  and not (e->>'reportCategoryNull')::boolean
                             from jsonb_array_elements(r->'pairs') as e where (e->>'itemId')::uuid = its[2]),
                          'pair shape');
-  perform pg_temp.expect((select (e->>'sameMapVersion')::boolean and round((e->>'dx')::numeric, 2) = -0.05
+  perform pg_temp.expect((select (e->>'sameMapVersion')::boolean and round((e->>'dx')::numeric, 2) = 0.05
                                  and (e->>'dy')::numeric = 0 and (e->>'mapWidth')::int = 1600 and (e->>'mapHeight')::int = 1000
                             from jsonb_array_elements(r->'pairs') as e where (e->>'itemId')::uuid = its[1]),
                          'same-map pins give dx/dy and the map dimensions');
