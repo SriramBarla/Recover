@@ -104,3 +104,19 @@ test('ListObjectsV2: regex parser decodes entities and follows continuation toke
   ]);
   await assert.rejects(f.storage.list('incoming', '../'), PermanentError);
 });
+
+test('listPage: one ListObjectsV2 request per call, passing the caller token and returning the next one', async () => {
+  const page1 = `<ListBucketResult><IsTruncated>true</IsTruncated><Contents><Key>${KEY}</Key><LastModified>2026-09-30T01:00:00Z</LastModified><Size>1</Size></Contents><NextContinuationToken>tok-2</NextContinuationToken></ListBucketResult>`;
+  const page2 = `<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>z</Key><LastModified>2026-09-30T03:00:00Z</LastModified><Size>3</Size></Contents></ListBucketResult>`;
+  const f = fakes((url) => new Response(url.includes('continuation-token=tok-2') ? page2 : page1, { status: 200 }));
+  const first = await f.storage.listPage('incoming', '');
+  assert.deepEqual([first.objects.map((o) => o.key), first.nextToken], [[KEY], 'tok-2']);
+  const second = await f.storage.listPage('incoming', '', { token: first.nextToken, maxKeys: 5000 });
+  assert.deepEqual([second.objects.map((o) => o.key), second.nextToken], [['z'], null]);
+  const queries = f.signed.filter((s) => s.query).map((s) => s.query);
+  assert.deepEqual(queries.map((q) => [q['max-keys'], q['continuation-token'] ?? null]), [['1000', null], ['1000', 'tok-2']], 'max-keys is capped at 1000');
+  await assert.rejects(f.storage.listPage('secrets', ''), PermanentError);
+  await assert.rejects(f.storage.listPage('incoming', '../'), PermanentError);
+  const failing = fakes(() => new Response(null, { status: 503 }));
+  await assert.rejects(failing.storage.listPage('incoming', ''), RetryableError);
+});

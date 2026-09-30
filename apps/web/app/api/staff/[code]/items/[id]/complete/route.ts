@@ -9,6 +9,9 @@ export const POST = handler<{ code: string; id: string }>('staff.item.complete',
   await mutation(req);
   const ctx = await apiSchool(p.code);
   const itemId = uuidOf(p.id, 'itemId');
+  // Authorize first (membership at this school and the item in it, checked in SQL), so a caller from
+  // another school gets forbidden or not_found without the worker ever being asked about the item.
+  await schoolCall(ctx, 'api_staff_item_get', { p_school_code: ctx.code, p_item_id: itemId });
   const check = await workerJson<{ objects?: CompleteCheckObject[] }>('/api/media/complete-check', {
     itemId,
     schoolId: ctx.schoolId,

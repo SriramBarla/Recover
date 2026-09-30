@@ -61,7 +61,7 @@ npm run dev                 # web :3000, worker :3001, dev scheduler
 
 Then open:
 - **Student app:** http://localhost:3000/s/FCHS
-- **Staff app:** http://localhost:3000/staff. Locally, a dev-only sign-in is enabled with `RECOVER_DEV_LOGIN=1`; it is refused on Vercel.
+- **Staff app:** http://localhost:3000/staff. Locally, a dev-only sign-in is enabled with `RECOVER_DEV_LOGIN=1` under `next dev`; it is refused on Vercel and in production builds.
 
 **Tests:**
 

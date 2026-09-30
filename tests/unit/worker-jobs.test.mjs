@@ -23,13 +23,26 @@ const PHOTO = '33333333-3333-4333-8333-333333333333';
 const BASE = `${SCHOOL}/${ITEM}/${PHOTO}`;
 const TOKEN = 'ab'.repeat(16);
 
-function memStorage(initial = {}) {
+function memStorage(initial = {}, { pageSize = 1000 } = {}) {
   const objects = new Map(Object.entries(initial).map(([k, v]) => [k, { bytes: Buffer.from(v.bytes ?? 'x'), lastModified: v.lastModified ?? new Date() }]));
   const ops = [];
   const k = (b, key) => `${b}/${key}`;
+  const listing = (b) =>
+    [...objects.entries()]
+      .filter(([key]) => key.startsWith(`${b}/`))
+      .map(([key, o]) => ({ key: key.slice(b.length + 1), lastModified: o.lastModified, bytes: o.bytes.length }))
+      .sort((x, y) => (x.key < y.key ? -1 : x.key > y.key ? 1 : 0));
   return {
     objects,
     ops,
+    // ListObjectsV2 in key order; the continuation token is the last key returned (like start-after), so
+    // deleting listed keys never shifts the next page.
+    async listPage(b, _prefix, { token = null, maxKeys = pageSize } = {}) {
+      ops.push(['listPage', b, token]);
+      const rest = listing(b).filter((o) => token === null || o.key > token);
+      const page = rest.slice(0, Math.min(maxKeys, pageSize));
+      return { objects: page, nextToken: rest.length > page.length ? page.at(-1).key : null };
+    },
     async getBytes(b, key) {
       ops.push(['get', k(b, key)]);
       const o = objects.get(k(b, key));
@@ -293,6 +306,46 @@ test('reconcile_orphan_uploads: deletes only objects older than 3 h that no wait
   const left = [...storage.objects.keys()].map((k) => k.slice('incoming/'.length)).sort();
   assert.deepEqual(left, [keys.fresh, keys.waiting].sort());
   assert.deepEqual(cleared, [P(3)], 'only cleanup debt clears the DB pointer');
+});
+
+// security review L4: the sweep follows the continuation token past the first page instead of stopping there.
+const orphanWorld = (n, opts) => {
+  const old = new Date(Date.now() - 4 * 3_600_000);
+  const key = (i) => `${SCHOOL}/${ITEM}/${String(i).padStart(8, '0')}-4444-4444-8444-444444444444/raw`;
+  const storage = memStorage(Object.fromEntries(Array.from({ length: n }, (_, i) => [`incoming/${key(i)}`, { lastModified: old }])), opts);
+  const logs = [];
+  const { ctx } = ctxWith({ system_get_photo: () => { throw new PublicError('not_found'); } }, storage, {
+    log: (level, event, fields) => logs.push({ level, event, fields }),
+  });
+  return { storage, ctx, logs };
+};
+
+test('reconcile_orphan_uploads: pages through the whole bucket with the continuation token', async () => {
+  const w = orphanWorld(7, { pageSize: 3 });
+  await reconcileOrphans.run({}, w.ctx);
+  assert.equal(w.storage.objects.size, 0, 'orphans beyond the first page are reached');
+  const pages = w.storage.ops.filter((o) => o[0] === 'listPage');
+  assert.equal(pages.length, 3);
+  assert.equal(pages[0][2], null, 'the first page has no token');
+  assert.ok(pages.slice(1).every((p) => typeof p[2] === 'string'), 'later pages pass the token');
+  const done = w.logs.find((l) => l.event === 'orphans_reconciled').fields;
+  assert.deepEqual([done.listed, done.pages, done.complete, done.deleted], [7, 3, true, 7]);
+});
+
+test('reconcile_orphan_uploads: stops at the time budget without starting another page', async () => {
+  const w = orphanWorld(7, { pageSize: 3 });
+  let now = Date.now();
+  w.ctx.deadline = now + 5_000 + 2; // two units of work left before the 5 s reserve
+  const realNow = Date.now;
+  Date.now = () => now++;
+  try {
+    await reconcileOrphans.run({}, w.ctx);
+  } finally {
+    Date.now = realNow;
+  }
+  assert.ok(w.storage.objects.size > 0, 'work is left for the next hourly run');
+  assert.equal(w.storage.ops.filter((o) => o[0] === 'listPage').length, 1);
+  assert.equal(w.logs.find((l) => l.event === 'orphans_reconciled').fields.complete, false);
 });
 
 // ---------- make_variants ----------

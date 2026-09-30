@@ -1169,6 +1169,18 @@ begin
   r := pg_temp.w(format('select public.system_map_draft_deleted(%L)', mv));
   perform pg_temp.expect((select draft_storage_path is null and draft_canonical_path is null from public.map_versions where id = mv),
                          'map_draft_deleted clears the draft keys');
+
+  -- error_rollup (0410, security review L1): day rows older than 90 days go; day 90 and newer stay
+  insert into public.error_rollup (day, signature, count)
+  values ((now() at time zone 'UTC')::date - 91, 'zz_test:old', 5),
+         ((now() at time zone 'UTC')::date - 90, 'zz_test:edge', 5),
+         ((now() at time zone 'UTC')::date, 'zz_test:today', 5);
+  perform pg_temp.expect('error_rollup' = any (private.sys_purge_kinds()), 'error_rollup is a purge kind (0450 enqueues it nightly)');
+  r := pg_temp.w($q$select public.system_purge('error_rollup')$q$);
+  perform pg_temp.expect((r->>'count')::int >= 1 and r->>'kind' = 'error_rollup'
+                         and (select array_agg(signature order by signature) from public.error_rollup where signature like 'zz\_test:%')
+                             = array['zz_test:edge', 'zz_test:today'],
+                         'purge error_rollup: 90 d after the UTC day');
 end $$;
 
 -- =====================================================================================================

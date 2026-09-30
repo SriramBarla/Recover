@@ -26,10 +26,20 @@ test('search_all has its own budget, sized like search', () => {
   assert.notEqual(LIMITS.search_all, LIMITS.search);
 });
 
+// The unauthenticated counters carry no device, so they are limited per address only (0210).
+const IP_ONLY = new Set(['client_error', 'high_value']);
+
+test('the unauthenticated counters are per address only, mirroring 0210', () => {
+  const per10m = (max) => [{ windowSeconds: 10 * MIN, max }];
+  assert.deepEqual(LIMITS.high_value, { device: [], ip: { onCampus: per10m(20), offCampus: per10m(20) } });
+  assert.deepEqual(LIMITS.client_error, { device: [], ip: { onCampus: per10m(60), offCampus: per10m(60) } });
+});
+
 test('every action has the same shape and positive integer windows', () => {
-  assert.deepEqual(Object.keys(LIMITS).sort(), ['lost_report', 'post_item', 'search', 'search_all', 'status_poll']);
+  assert.deepEqual(Object.keys(LIMITS).sort(), ['client_error', 'high_value', 'lost_report', 'post_item', 'search', 'search_all', 'status_poll']);
   for (const [action, l] of Object.entries(LIMITS)) {
-    assert.ok(l.device.length > 0, `${action} has a device limit`);
+    if (IP_ONLY.has(action)) assert.ok(l.device.length === 0 && l.ip.offCampus.length > 0, `${action} is limited per address`);
+    else assert.ok(l.device.length > 0, `${action} has a device limit`);
     for (const win of [...l.device, ...l.ip.onCampus, ...l.ip.offCampus]) {
       assert.ok(Number.isInteger(win.windowSeconds) && win.windowSeconds > 0, action);
       assert.ok(Number.isInteger(win.max) && win.max > 0, action);

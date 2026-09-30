@@ -565,6 +565,65 @@ begin
   raise notice 'PASS api_rate_take: device day/week windows, lost_report, status_poll, IP-only for NULL device, campus split, validation';
 end $$;
 
+-- api_rate_take, the unauthenticated counters (0210, security review L1): high_value is school-scoped and
+-- client_error school-less (district scope); both are per address only.
+do $$
+declare
+  v_scope constant text := 'school:0a0a0a0a-0000-4000-8000-000000000001';
+  v_d1 constant bytea := decode('01' || repeat('d1', 32), 'hex');
+  v_ip4 constant bytea := decode(repeat('14', 32), 'hex');
+  v_ip5 constant bytea := decode(repeat('15', 32), 'hex');
+  v_detail text;
+  i int;
+begin
+  set local role recover_web;
+  -- high_value: 20 per 10 minutes per address, on or off campus
+  for i in 1..20 loop
+    perform public.api_rate_take('FCHS', 'high_value', null, v_ip4, (i % 2 = 0));
+  end loop;
+  v_detail := pg_temp.expect_error(format('select public.api_rate_take(%L, %L, null, %L::bytea, true)',
+                                          'FCHS', 'high_value', v_ip4), 'rate_limited');
+  if v_detail::int not between 1 and 600 then
+    raise exception 'FAIL high_value retry seconds: %', v_detail;
+  end if;
+  -- client_error: no school, 60 per 10 minutes per address
+  for i in 1..60 loop
+    perform public.api_rate_take(null, 'client_error', null, v_ip4, null);
+  end loop;
+  perform pg_temp.expect_error(format('select public.api_rate_take(null, %L, null, %L::bytea, null)', 'client_error', v_ip4),
+                               'rate_limited');
+  perform public.api_rate_take(null, 'client_error', null, v_ip5, null);  -- another address has its own budget
+  -- pairing and input rules
+  perform pg_temp.expect_error(format('select public.api_rate_take(%L, %L, null, %L::bytea, null)', 'FCHS', 'client_error', v_ip5),
+                               'invalid_input', 'school_code');
+  perform pg_temp.expect_error(format('select public.api_rate_take(null, %L, null, %L::bytea, null)', 'high_value', v_ip5),
+                               'not_found');
+  perform pg_temp.expect_error(format('select public.api_rate_take(null, %L, null, %L::bytea, null)', 'search', v_ip5),
+                               'not_found');
+  perform pg_temp.expect_error(format('select public.api_rate_take(%L, %L, %L::bytea, null, null)', 'FCHS', 'high_value', v_d1),
+                               'invalid_input', 'ip_hmac');
+  perform pg_temp.expect_error(format('select public.api_rate_take(null, %L, %L::bytea, null, null)', 'client_error', v_d1),
+                               'invalid_input', 'ip_hmac');
+  perform pg_temp.expect_error($q$select public.api_rate_take(null, 'delete_everything', null, '\x1414141414141414141414141414141414', null)$q$,
+                               'invalid_input', 'action');
+  reset role;
+
+  if (select c.count from public.rate_counters c where c.tenant_scope = v_scope and c.action = 'high_value:10m'
+        and c.subject_kind = 'ip' and c.subject_hmac = v_ip4) <> 20 then
+    raise exception 'FAIL high_value counter should be 20 (the refused call is not counted)';
+  end if;
+  if (select c.count from public.rate_counters c where c.tenant_scope = 'district' and c.action = 'client_error:10m'
+        and c.subject_kind = 'ip' and c.subject_hmac = v_ip4) <> 60 then
+    raise exception 'FAIL client_error counter should be 60 under the district scope';
+  end if;
+  if exists (select 1 from public.rate_counters c
+              where (c.action like 'client\_error:%' and c.tenant_scope <> 'district')
+                 or (c.action like 'high\_value:%' and c.subject_kind <> 'ip')) then
+    raise exception 'FAIL client_error must be district-scoped and high_value per address only';
+  end if;
+  raise notice 'PASS api_rate_take: high_value per school and address, school-less client_error, pairing rules';
+end $$;
+
 -- ---------------------------------------------------------------------------------------------------
 -- api_idempotency_begin / _finish (F-77, G-39)
 -- ---------------------------------------------------------------------------------------------------
@@ -1116,7 +1175,12 @@ begin
   perform pg_temp.expect_error($q$select public.api_record_high_value_redirect('FCHS', 'bottle')$q$, 'invalid_input', 'category');
   v_err := public.api_record_error(v_sig);
   perform public.api_record_error(v_sig);
-  perform pg_temp.expect_error($q$select public.api_record_error('has a space')$q$, 'invalid_input', 'signature');
+  -- 0210: the web's server-side signatures carry one space (`<METHOD> <route>:<Class>`); other punctuation,
+  -- the client's `*` wildcard, and anything over 120 characters are still refused
+  perform public.api_record_error('POST /api/s/[code]/items:TypeError');
+  perform pg_temp.expect_error($q$select public.api_record_error('has;semicolon')$q$, 'invalid_input', 'signature');
+  perform pg_temp.expect_error($q$select public.api_record_error('client:TypeError:/s/*/found')$q$, 'invalid_input', 'signature');
+  perform pg_temp.expect_error($q$select public.api_record_error(E'tab\there')$q$, 'invalid_input', 'signature');
   perform pg_temp.expect_error(format('select public.api_record_error(%L)', repeat('a', 121)), 'invalid_input', 'signature');
   v_domains := public.api_get_staff_domains();
   v_health := public.api_health();
@@ -1127,7 +1191,8 @@ begin
     raise exception 'FAIL high-value redirect counter';
   end if;
   if v_err <> '{"ok": true}'::jsonb
-     or (select e.count from public.error_rollup e where e.signature = v_sig and e.day = (now() at time zone 'UTC')::date) <> 2 then
+     or (select e.count from public.error_rollup e where e.signature = v_sig and e.day = (now() at time zone 'UTC')::date) <> 2
+     or not exists (select 1 from public.error_rollup e where e.signature = 'POST /api/s/[code]/items:TypeError') then
     raise exception 'FAIL error_rollup upsert';
   end if;
   if v_domains <> jsonb_build_object('domains', (select to_jsonb(d.staff_email_domains) from public.district_settings d where d.id = 1)) then

@@ -86,7 +86,7 @@ postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
 2. **OIDC.** In Team Settings > Security > OIDC Federation, enable team issuer mode. `recover-web` calls the worker with its OIDC token, so set `WORKER_OIDC_AUDIENCE` on the web project. On the worker, set `WEB_OIDC_ISSUER`, `WEB_OIDC_AUDIENCE`, `WEB_PROJECT_ID`, and `WEB_OWNER_ID` (F-93, F-121).
 3. **Environment variables.** Set each project's variables from `.env.example` with `vercel env add <NAME> production`:
    - Never put `SUPABASE_S3_*` into `recover-web`.
-   - Never set `RECOVER_DEV_LOGIN` or `RECOVER_DEV_AUTH` in any Vercel environment. Both are refused on Vercel anyway.
+   - Never set `RECOVER_DEV_LOGIN` or `RECOVER_DEV_AUTH` in any Vercel environment. Both are refused on Vercel and in any production build anyway (a production server that finds either set logs `dev_flags_ignored` once at startup).
 4. **Deployment Protection.** Enable it on `recover-worker`, and add a protection bypass for the scheduler if the chosen mode blocks the database's drain call (O-24).
 5. **Domain.** Use the district domain on `recover-web`. `recover-worker` keeps its Vercel domain; it has no public product routes.
 

@@ -37,7 +37,8 @@ export const RETENTION: readonly RetentionRule[] = [
   { table: 'screening_runs', threshold: '30 d', seconds: 30 * DAY, job: 'purge:screening_runs', action: 'signals reduced to aggregate counts' },
   { table: 'media_deletion_objects', threshold: '90 d after verification', seconds: 90 * DAY, job: 'purge:deletion_evidence', action: 'storage_path on object rows' },
   { table: 'audit_log', threshold: '2 y', seconds: 730 * DAY, job: 'manual retention migration', action: 'rows' },
-  { table: 'error_rollup', threshold: 'indefinite (aggregate signatures and counts only)', seconds: null, job: 'none', action: 'kept' },
+  // Was indefinite; the unauthenticated /api/client-error beacon writes here, so it is bounded (0410).
+  { table: 'error_rollup', threshold: '90 d after the UTC day', seconds: 90 * DAY, job: 'purge:error_rollup', action: 'rows (aggregate signatures and counts)' },
   { table: 'daily_school_stats', threshold: 'indefinite (aggregate, no individual-level data; §15.1)', seconds: null, job: 'none', action: 'kept' },
 ];
 

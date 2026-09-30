@@ -12,6 +12,7 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type HeadResult = { exists: boolean; bytes: number | null; contentType: string | null };
 export type ListedObject = { key: string; lastModified: Date; bytes: number };
+export type ListPage = { objects: ListedObject[]; nextToken: string | null };
 export type Presigned = { url: string; expiresAt: string };
 
 export type Storage = {
@@ -25,6 +26,9 @@ export type Storage = {
   // 204 or 404 are both success: deletion is idempotent (§9.6).
   del(bucket: Bucket, key: string): Promise<void>;
   list(bucket: Bucket, prefix: string, opts?: { limit?: number }): Promise<ListedObject[]>;
+  // One ListObjectsV2 page (at most maxKeys, 1000 by default) starting at `token`; nextToken is null on
+  // the last page. For sweeps that must reach every key without holding them all in memory.
+  listPage(bucket: Bucket, prefix: string, opts?: { token?: string | null; maxKeys?: number }): Promise<ListPage>;
 };
 
 const BUCKETS: ReadonlySet<string> = new Set(['incoming', 'originals', 'variants', 'map_drafts', 'maps']);
@@ -145,6 +149,17 @@ export function createStorage(cfg: S3Config, signer: Signer, fetchImpl: FetchLik
     return res;
   }
 
+  async function listPage(bucket: Bucket, prefix: string, opts: { token?: string | null; maxKeys?: number } = {}): Promise<ListPage> {
+    if (!BUCKETS.has(bucket) || !PREFIX_RE.test(prefix)) throw new PermanentError('path_refused');
+    const maxKeys = Math.min(1000, Math.max(1, Math.floor(opts.maxKeys ?? 1000)));
+    const query: Record<string, string> = { 'list-type': '2', 'max-keys': String(maxKeys) };
+    if (prefix) query.prefix = prefix;
+    if (opts.token) query['continuation-token'] = opts.token;
+    const res = await send('GET', bucket, undefined, { query }); // bucket-level: `/{bucket}?list-type=2`
+    if (res.status !== 200) return unexpected(res);
+    return parseListPage(await res.text());
+  }
+
   return {
     presignPut(bucket, key, expiresSeconds, contentType) {
       checkTarget(bucket, key);
@@ -192,21 +207,17 @@ export function createStorage(cfg: S3Config, signer: Signer, fetchImpl: FetchLik
     },
 
     async list(bucket, prefix, opts = {}) {
-      if (!BUCKETS.has(bucket) || !PREFIX_RE.test(prefix)) throw new PermanentError('path_refused');
       const limit = opts.limit ?? 1000;
       const out: ListedObject[] = [];
       let token: string | null = null;
       do {
-        const query: Record<string, string> = { 'list-type': '2', 'max-keys': String(Math.min(1000, limit)) };
-        if (prefix) query.prefix = prefix;
-        if (token) query['continuation-token'] = token;
-        const res = await send('GET', bucket, undefined, { query }); // bucket-level: `/{bucket}?list-type=2`
-        if (res.status !== 200) return unexpected(res);
-        const page = parseListPage(await res.text());
+        const page = await listPage(bucket, prefix, { token, maxKeys: limit });
         out.push(...page.objects);
         token = page.nextToken;
       } while (token && out.length < limit);
       return out.slice(0, limit);
     },
+
+    listPage,
   };
 }
