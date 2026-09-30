@@ -1,0 +1,24 @@
+{
+  "name": "get-bucket-list-objects",
+  "source": "AWS S3 API Reference, Signature Calculations for the Authorization Header: Transferring Payload in a Single Chunk, Example: Get Bucket (List Objects)",
+  "reference": "https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html",
+  "mode": "header",
+  "request": {
+    "method": "GET",
+    "endpoint": "https://examplebucket.s3.amazonaws.com",
+    "query": { "max-keys": "2", "prefix": "J" },
+    "body": "",
+    "region": "us-east-1",
+    "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+    "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "now": "2013-05-24T00:00:00Z"
+  },
+  "expected": {
+    "payloadHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "canonicalRequest": "GET\n/\nmax-keys=2&prefix=J\nhost:examplebucket.s3.amazonaws.com\nx-amz-content-sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\nx-amz-date:20130524T000000Z\n\nhost;x-amz-content-sha256;x-amz-date\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stringToSign": "AWS4-HMAC-SHA256\n20130524T000000Z\n20130524/us-east-1/s3/aws4_request\ndf57d21db20da04d7fa30298dd4488ba3a2b47ca3a489c74750e0f1e7df1b9b7",
+    "signature": "34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7",
+    "authorization": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date,Signature=34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7",
+    "url": "https://examplebucket.s3.amazonaws.com/?max-keys=2&prefix=J"
+  }
+}

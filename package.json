@@ -2,8 +2,13 @@
   "name": "recover",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
-  "engines": { "node": ">=22.18" },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "db:start": "supabase start",
@@ -17,6 +22,7 @@
     "@types/node": "22.20.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "playwright": "^1.63.0",
     "typescript": "6.0.3"
   }
 }
