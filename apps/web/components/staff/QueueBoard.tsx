@@ -230,10 +230,25 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
           Refresh
         </button>
       </div>
-      <p className="hint">
-        Keyboard: <kbd>J</kbd> next, <kbd>K</kbd> previous, <kbd>A</kbd> approve, <kbd>E</kbd> approve with edits, <kbd>R</kbd> reject, <kbd>X</kbd> select,{' '}
-        <kbd>Esc</kbd> close. Every shortcut has a button on the card.
-      </p>
+      <div className="spread">
+        <p className="hint" style={{ margin: 0 }}>
+          Keyboard: <kbd>J</kbd> next, <kbd>K</kbd> previous, <kbd>A</kbd> approve, <kbd>E</kbd> approve with edits, <kbd>R</kbd> reject, <kbd>X</kbd> select,{' '}
+          <kbd>Esc</kbd> close. Every shortcut has a button.
+        </p>
+        {items.length > 1 ? (
+          <div className="row" role="group" aria-label="Move between items">
+            <button type="button" className="btn" disabled={focus <= 0} onClick={() => move(-1)}>
+              Previous item <kbd aria-hidden="true">K</kbd>
+            </button>
+            <button type="button" className="btn" disabled={focus >= items.length - 1} onClick={() => move(1)}>
+              Next item <kbd aria-hidden="true">J</kbd>
+            </button>
+            <span className="small muted">
+              {Math.min(focus + 1, items.length)} of {items.length}
+            </span>
+          </div>
+        ) : null}
+      </div>
       <p className="visually-hidden" aria-live="polite" role="status">
         {live}
       </p>
