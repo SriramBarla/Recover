@@ -129,7 +129,7 @@ export const POST = handle<{ code: string }>('POST /api/s/[code]/items', async (
   const school = meta.school;
   if (!school.flags.studentPosting) throw new PublicError('feature_disabled');
 
-  const device = getDevice(req, school.id, { create: true }); // 3
+  const device = await getDevice(req, school, { create: true }); // 3
   reply.setCookie = device.setCookie;
   const touch = await api<{ blocked: boolean }>('api_device_touch', {
     p_school_code: school.code,

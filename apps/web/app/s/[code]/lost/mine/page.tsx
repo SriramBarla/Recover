@@ -21,7 +21,7 @@ function hasNew(r: MyLostReport): boolean {
 export default async function MyLostReportsPage({ params }: Props) {
   const meta = await metaForPage((await params).code);
   const code = meta.school.code;
-  const digest = await deviceDigest(meta.school.id);
+  const digest = await deviceDigest(meta.school);
   const rows = digest
     ? (await api<{ reports: MyLostReport[] }>('api_my_lost_reports', { p_school_code: code, p_device_digest: digest })).reports
     : [];

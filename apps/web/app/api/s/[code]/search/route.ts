@@ -11,7 +11,7 @@ import { toPublicItem } from '@/lib/storage-url.ts';
 
 export const GET = handle<{ code: string }>('GET /api/s/[code]/search', async (req, { code }, reply) => {
   const meta = await getMeta(code);
-  const device = getDevice(req, meta.school.id, { create: false });
+  const device = await getDevice(req, meta.school, { create: false });
   await take(meta.school.code, 'search', device?.digest ?? null, req);
   const params = req.nextUrl.searchParams;
   const q = cleanText(params.get('q') ?? '', { field: 'q', min: 1, max: 120 });

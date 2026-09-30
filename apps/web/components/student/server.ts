@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation';
 import type { Meta } from '@recover/shared/dto.ts';
 import { PublicError } from '@recover/shared/errors.ts';
 import { getMeta } from '@/lib/cache.ts';
-import { DEVICE_COOKIE, digestFromCookieValue } from '@/lib/device.ts';
+import { DEVICE_COOKIE, cookieDigest, type DeviceSchool } from '@/lib/device.ts';
 
 export function isNotFound(e: unknown): boolean {
   return e instanceof PublicError && e.code === 'not_found';
@@ -30,8 +30,10 @@ export async function titleFor(code: string, label: string): Promise<Metadata> {
   }
 }
 
-export async function deviceDigest(schoolId: string): Promise<Buffer | null> {
-  return digestFromCookieValue((await cookies()).get(DEVICE_COOKIE)?.value, schoolId);
+// Same rule as the route handlers' getDevice: during a device-key rotation window the browser's rows move to
+// its current-key digest before the page reads with it (lib/device.ts).
+export async function deviceDigest(school: DeviceSchool): Promise<Buffer | null> {
+  return cookieDigest((await cookies()).get(DEVICE_COOKIE)?.value, school);
 }
 
 export type SearchParams = Record<string, string | string[] | undefined>;

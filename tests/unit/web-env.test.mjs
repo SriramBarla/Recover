@@ -1,11 +1,17 @@
 // Dev-only switches in the web app (security review L3; BUILD-CONTRACT.md section 9.3): RECOVER_DEV_LOGIN and
 // RECOVER_DEV_AUTH work under `next dev` only. Vercel and every production build (NODE_ENV=production) refuse
 // them whatever they say, and a production server names the ignored ones in one startup warning.
+// Device keys (13 Implementation guide "Device cookie issuance"; RUNBOOK.md section 21): DEVICE_KEY_CURRENT and
+// DEVICE_KEY_PREVIOUS name versions, each needs its DEVICE_KEY_V<n>, and startup names what is wrong.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { devLoginEnabled, devWorkerAuthEnabled, ignoredDevFlags } from '../../apps/web/lib/env.ts';
+import { randomBytes } from 'node:crypto';
+import { deviceKeyReport, deviceKeys, devLoginEnabled, devWorkerAuthEnabled, ignoredDevFlags } from '../../apps/web/lib/env.ts';
 import { register } from '../../apps/web/instrumentation.ts';
-import { reportIgnoredDevFlags } from '../../apps/web/lib/startup.ts';
+import { reportDeviceKeys, reportIgnoredDevFlags } from '../../apps/web/lib/startup.ts';
+
+const KEY_1 = randomBytes(32).toString('base64url');
+const KEY_2 = randomBytes(32).toString('base64url');
 
 function withEnv(vars, fn) {
   const saved = {};
@@ -40,7 +46,17 @@ function stderrLines(fn) {
   return lines;
 }
 
-const DEV = { RECOVER_DEV_LOGIN: '1', RECOVER_DEV_AUTH: '1', VERCEL: undefined, NODE_ENV: 'development', NEXT_RUNTIME: 'nodejs' };
+const DEV = {
+  RECOVER_DEV_LOGIN: '1',
+  RECOVER_DEV_AUTH: '1',
+  VERCEL: undefined,
+  NODE_ENV: 'development',
+  NEXT_RUNTIME: 'nodejs',
+  DEVICE_KEY_V1: KEY_1,
+  DEVICE_KEY_V2: undefined,
+  DEVICE_KEY_CURRENT: undefined,
+  DEVICE_KEY_PREVIOUS: undefined,
+};
 
 test('next dev keeps both dev switches', () => {
   withEnv(DEV, () => {
@@ -127,4 +143,78 @@ test('register() runs the startup check on the Node.js runtime only', async () =
   const production = { ...DEV, NODE_ENV: 'production' };
   assert.equal((await run(production)).length, 1, 'Node.js: the ignored switches are reported once');
   assert.deepEqual(await run({ ...production, NEXT_RUNTIME: 'edge' }), [], 'Edge: nothing is imported or logged');
+  const noKey = { ...production, RECOVER_DEV_LOGIN: undefined, RECOVER_DEV_AUTH: undefined, DEVICE_KEY_V1: undefined };
+  assert.deepEqual((await run(noKey)).map((l) => JSON.parse(l).event), ['device_keys_invalid'], 'Node.js: device keys are checked too');
+});
+
+test('device keys: version 1 by default, and a rotation window names two versions', () => {
+  assert.deepEqual(deviceKeys({ DEVICE_KEY_V1: KEY_1 }), { current: { version: 1, key: KEY_1 }, previous: null });
+  assert.equal(deviceKeys({ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_CURRENT: '', DEVICE_KEY_PREVIOUS: '' }).current.version, 1,
+    'empty values are unset');
+  assert.deepEqual(deviceKeys({ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2', DEVICE_KEY_PREVIOUS: '1' }), {
+    current: { version: 2, key: KEY_2 },
+    previous: { version: 1, key: KEY_1 },
+  });
+  assert.deepEqual(deviceKeys({ DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2' }), { current: { version: 2, key: KEY_2 }, previous: null },
+    'after the window only the current key is needed');
+  assert.equal(deviceKeys({ DEVICE_KEY_V255: KEY_2, DEVICE_KEY_CURRENT: '255' }).current.version, 255, 'the version is one byte');
+  const padded = Buffer.from(KEY_1, 'base64url').toString('base64');
+  assert.equal(deviceKeys({ DEVICE_KEY_V1: padded }).current.key, padded, 'the padded standard-base64 spelling is the same key');
+});
+
+test('device keys: a bad configuration names the variable, never a value', () => {
+  const secretish = `${KEY_1.slice(0, 40)}!!!`;
+  const cases = [
+    [{}, /^Missing required environment variable DEVICE_KEY_V1$/],
+    [{ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_CURRENT: '2' }, /^Missing required environment variable DEVICE_KEY_V2$/],
+    [{ DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2', DEVICE_KEY_PREVIOUS: '1' }, /^Missing required environment variable DEVICE_KEY_V1$/],
+    [{ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_PREVIOUS: '1' }, /^DEVICE_KEY_PREVIOUS must differ from DEVICE_KEY_CURRENT$/],
+    [{ DEVICE_KEY_V1: secretish }, /^DEVICE_KEY_V1 must be a base64url 32-byte key$/],
+    [{ DEVICE_KEY_V1: KEY_1.slice(0, 42) }, /^DEVICE_KEY_V1 must be a base64url 32-byte key$/],
+    [{ DEVICE_KEY_V1: `${KEY_1}A` }, /^DEVICE_KEY_V1 must be a base64url 32-byte key$/],
+  ];
+  for (const v of ['two', '0', '256', ' 2', '02', '1.0', '-1']) {
+    cases.push([{ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_CURRENT: v }, /^DEVICE_KEY_CURRENT must be a key version from 1 to 255$/]);
+    cases.push([{ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_PREVIOUS: v }, /^DEVICE_KEY_PREVIOUS must be a key version from 1 to 255$/]);
+  }
+  for (const [env, message] of cases) {
+    assert.throws(() => deviceKeys(env), (e) => message.test(e.message) && !e.message.includes(secretish) && !e.message.includes(KEY_1),
+      JSON.stringify(Object.keys(env)));
+  }
+});
+
+test('device keys: startup names the problem, and the keys no version uses', () => {
+  assert.deepEqual(deviceKeyReport({ DEVICE_KEY_V1: KEY_1 }), { problem: null, unused: [] });
+  assert.deepEqual(deviceKeyReport({ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2', DEVICE_KEY_PREVIOUS: '1' }),
+    { problem: null, unused: [] }, 'an open window uses both keys');
+  assert.deepEqual(deviceKeyReport({ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2' }),
+    { problem: null, unused: ['DEVICE_KEY_V1'] }, 'a window opened without DEVICE_KEY_PREVIOUS, or V1 left behind after it');
+  assert.deepEqual(deviceKeyReport({ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_V2: KEY_2 }), { problem: null, unused: ['DEVICE_KEY_V2'] });
+  assert.deepEqual(deviceKeyReport({ DEVICE_KEY_V1: KEY_1, DEVICE_KEY_V2: '', DEVICE_KEY_V0: KEY_2, DEVICE_KEY_VX: KEY_2 }),
+    { problem: null, unused: [] }, 'empty values and names that are not versions are not keys');
+  assert.deepEqual(deviceKeyReport({ DEVICE_KEY_CURRENT: '2', DEVICE_KEY_V1: KEY_1 }),
+    { problem: 'Missing required environment variable DEVICE_KEY_V2', unused: [] });
+});
+
+test('device keys: startup logs one error or one warning, names only', () => {
+  const lines = stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V1: undefined }, () => reportDeviceKeys()));
+  assert.equal(lines.length, 1);
+  const error = JSON.parse(lines[0]);
+  assert.equal(error.level, 'error');
+  assert.equal(error.event, 'device_keys_invalid');
+  assert.equal(error.problem, 'Missing required environment variable DEVICE_KEY_V1');
+
+  const unused = stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2' }, () => reportDeviceKeys()));
+  assert.equal(unused.length, 1);
+  const warn = JSON.parse(unused[0]);
+  assert.equal(warn.level, 'warn');
+  assert.equal(warn.event, 'device_keys_unused');
+  assert.deepEqual(warn.variables, ['DEVICE_KEY_V1']);
+  assert.ok(!unused[0].includes(KEY_1) && !unused[0].includes(KEY_2));
+
+  assert.deepEqual(
+    stderrLines(() => withEnv({ ...DEV, DEVICE_KEY_V2: KEY_2, DEVICE_KEY_CURRENT: '2', DEVICE_KEY_PREVIOUS: '1' }, () => reportDeviceKeys())),
+    [],
+    'an open rotation window is quiet',
+  );
 });

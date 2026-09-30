@@ -3,7 +3,8 @@
 // an Edge bundle cannot contain (Next.js instrumentation guide, "Importing runtime-specific code").
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { reportIgnoredDevFlags } = await import('./lib/startup.ts');
+    const { reportDeviceKeys, reportIgnoredDevFlags } = await import('./lib/startup.ts');
     reportIgnoredDevFlags();
+    reportDeviceKeys();
   }
 }
