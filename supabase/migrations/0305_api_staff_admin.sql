@@ -15,7 +15,7 @@ set statement_timeout = '60s';
 -- Decimal text as sent by JS (toFixed / String) to double precision. NaN, Infinity, and malformed text are
 -- invalid_input naming the field; the exponent is bounded so the cast itself can never overflow.
 -- The raising helpers are STABLE rather than IMMUTABLE so the planner never pre-evaluates them.
-create or replace function private.staff_admin_float(p text, p_field text) returns double precision
+create or replace function private.admin_float(p text, p_field text) returns double precision
 language plpgsql stable set search_path = '' as $$
 begin
   if p is null or p !~ '^[+-]?([0-9]{1,20}(\.[0-9]{0,20})?|\.[0-9]{1,20})([eE][+-]?[0-9]{1,2})?$' then
@@ -25,7 +25,7 @@ begin
 end $$;
 
 -- §5.5 / §14.3: a school roster manages reviewer, office, and school_admin; district_admin is never grantable here.
-create or replace function private.staff_admin_role(p text) returns public.staff_role
+create or replace function private.admin_role(p text) returns public.staff_role
 language plpgsql stable set search_path = '' as $$
 begin
   if p = 'district_admin' then
@@ -38,7 +38,7 @@ begin
 end $$;
 
 -- Strict YYYY-MM-DD to date without raising; NULL for malformed or impossible dates (2026-02-30).
-create or replace function private.staff_admin_day(p text) returns date
+create or replace function private.admin_day(p text) returns date
 language plpgsql immutable set search_path = '' as $$
 declare
   y int;
@@ -59,7 +59,7 @@ begin
 end $$;
 
 -- Calendar coverage ahead of the school's local today: days from today to the last calendar row on file (F-88).
-create or replace function private.staff_admin_calendar_horizon(p_school_id uuid) returns int
+create or replace function private.admin_calendar_horizon(p_school_id uuid) returns int
 language sql stable set search_path = '' as $$
   select coalesce(greatest(max(c.day) - (now() at time zone s.timezone)::date, 0), 0)
     from public.schools s
@@ -69,7 +69,7 @@ language sql stable set search_path = '' as $$
 $$;
 
 -- The school settings DTO. `config` carries exactly the keys api_staff_config_update accepts (§5.5).
-create or replace function private.staff_admin_config(p_school_id uuid) returns jsonb
+create or replace function private.admin_config(p_school_id uuid) returns jsonb
 language sql stable set search_path = '' as $$
   select jsonb_build_object(
     'school', jsonb_build_object('id', s.id, 'code', s.code, 'name', s.name, 'timezone', s.timezone),
@@ -89,7 +89,7 @@ language sql stable set search_path = '' as $$
       'studentPostingGlobalEnabled', coalesce(d.student_posting_global_enabled, false),
       'lostReportsGlobalEnabled', coalesce(d.lost_reports_global_enabled, false),
       'crossSchoolSearchGlobalEnabled', coalesce(d.cross_school_search_global_enabled, false)),
-    'calendarHorizonDays', private.staff_admin_calendar_horizon(s.id),
+    'calendarHorizonDays', private.admin_calendar_horizon(s.id),
     'updatedAt', s.updated_at)
     from public.schools s
     left join public.district_settings d on d.id = 1
@@ -133,7 +133,7 @@ begin
   ctx := private.assert_staff(p_assert, 'roster.invite', (private.school_by_code(p_school_code)).id, null, null,
                               jsonb_build_object('school_code', p_school_code, 'email', p_email, 'role', p_role,
                                                  'display_name', p_display_name));
-  v_role := private.staff_admin_role(p_role);
+  v_role := private.admin_role(p_role);
   v_email := lower(btrim(p_email));
   -- §14.1: the domain must equal an allowlisted domain exactly (never suffix or substring matching).
   if v_email is null or char_length(v_email) > 254 or v_email !~ '^[^@\s]+@[^@\s]+$'
@@ -196,7 +196,7 @@ begin
                               jsonb_build_object('school_code', p_school_code, 'member_id', p_member_id,
                                                  'role', p_role, 'status', p_status));
   if p_role is not null then
-    v_role := private.staff_admin_role(p_role);
+    v_role := private.admin_role(p_role);
   end if;
   if p_status is not null and p_status not in ('active', 'deactivated', 'invited') then
     perform private.fail('invalid_input', 'status');
@@ -357,8 +357,8 @@ begin
   ctx := private.assert_staff(p_assert, 'locations.write', (private.school_by_code(p_school_code)).id, p_location_id, null,
                               jsonb_build_object('school_code', p_school_code, 'location_id', p_location_id,
                                                  'map_version_id', p_map_version_id, 'x', p_x, 'y', p_y));
-  v_x := private.staff_admin_float(p_x, 'x');
-  v_y := private.staff_admin_float(p_y, 'y');
+  v_x := private.admin_float(p_x, 'x');
+  v_y := private.admin_float(p_y, 'y');
   if v_x < 0 or v_x > 1 then
     perform private.fail('invalid_input', 'x');
   end if;
@@ -481,17 +481,17 @@ begin
   if p_cx is null and r_zone.id is not null then
     v_cx := r_zone.cx;
   else
-    v_cx := private.staff_admin_float(p_cx, 'cx');
+    v_cx := private.admin_float(p_cx, 'cx');
   end if;
   if p_cy is null and r_zone.id is not null then
     v_cy := r_zone.cy;
   else
-    v_cy := private.staff_admin_float(p_cy, 'cy');
+    v_cy := private.admin_float(p_cy, 'cy');
   end if;
   if p_radius is null and r_zone.id is not null then
     v_radius := r_zone.radius;
   else
-    v_radius := private.staff_admin_float(p_radius, 'radius');
+    v_radius := private.admin_float(p_radius, 'radius');
   end if;
   if v_cx < 0 or v_cx > 1 then
     perform private.fail('invalid_input', 'cx');
@@ -581,7 +581,7 @@ declare
 begin
   ctx := private.assert_staff(p_assert, 'config.read', (private.school_by_code(p_school_code)).id, null, null,
                               jsonb_build_object('school_code', p_school_code));
-  return private.staff_admin_config(ctx.school_id);
+  return private.admin_config(ctx.school_id);
 end $$;
 
 -- p_changes is a partial object over the config keys of api_staff_config_get. Unknown keys and wrong types are
@@ -642,7 +642,7 @@ begin
   end loop;
 
   perform 1 from public.schools where id = ctx.school_id for update;
-  v_before := private.staff_admin_config(ctx.school_id) -> 'config';
+  v_before := private.admin_config(ctx.school_id) -> 'config';
   update public.schools
      set student_posting_enabled = coalesce((p_changes->>'studentPostingEnabled')::boolean, student_posting_enabled),
          lost_reports_enabled = coalesce((p_changes->>'lostReportsEnabled')::boolean, lost_reports_enabled),
@@ -655,8 +655,8 @@ begin
                                                  terminal_text_retention_days),
          enabled_categories = coalesce(v_cats, enabled_categories)
    where id = ctx.school_id;
-  v_after := private.staff_admin_config(ctx.school_id);
-  select coalesce(array_agg(k.key order by k.key), '{}') into v_changed
+  v_after := private.admin_config(ctx.school_id);
+  select coalesce(array_agg(k.key order by k.key collate "C"), '{}') into v_changed
     from jsonb_object_keys(v_after -> 'config') as k(key)
    where (v_after -> 'config' -> k.key) is distinct from (v_before -> k.key);
   if cardinality(v_changed) > 0 then
@@ -709,7 +709,7 @@ begin
        or (v_entry ->> 'closeAt') !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then
       perform private.fail('invalid_input', 'days');
     end if;
-    v_day := private.staff_admin_day(v_entry ->> 'day');
+    v_day := private.admin_day(v_entry ->> 'day');
     v_open := (v_entry ->> 'openAt')::time;
     v_close := (v_entry ->> 'closeAt')::time;
     if v_day is null or v_day = any (v_days)
@@ -732,7 +732,7 @@ begin
   perform private.audit(ctx.school_id, 'staff', ctx.member_id::text, (p_assert->>'request_id')::uuid,
     'calendar.update', 'school_calendar_days', ctx.school_id::text,
     '{}'::jsonb, '{}'::jsonb, jsonb_build_object('days', v_n));
-  return jsonb_build_object('upserted', v_n, 'horizonDays', private.staff_admin_calendar_horizon(ctx.school_id));
+  return jsonb_build_object('upserted', v_n, 'horizonDays', private.admin_calendar_horizon(ctx.school_id));
 end $$;
 
 -- ---------- dashboard (§17 metrics; §24 week-4 review) ----------
@@ -816,16 +816,16 @@ end $$;
 
 -- ---------- ownership and grants ----------
 
-revoke all on function private.staff_admin_float(text, text) from public;
-revoke all on function private.staff_admin_role(text) from public;
-revoke all on function private.staff_admin_day(text) from public;
-revoke all on function private.staff_admin_calendar_horizon(uuid) from public;
-revoke all on function private.staff_admin_config(uuid) from public;
-grant execute on function private.staff_admin_float(text, text) to recover_api_owner;
-grant execute on function private.staff_admin_role(text) to recover_api_owner;
-grant execute on function private.staff_admin_day(text) to recover_api_owner;
-grant execute on function private.staff_admin_calendar_horizon(uuid) to recover_api_owner;
-grant execute on function private.staff_admin_config(uuid) to recover_api_owner;
+revoke all on function private.admin_float(text, text) from public;
+revoke all on function private.admin_role(text) from public;
+revoke all on function private.admin_day(text) from public;
+revoke all on function private.admin_calendar_horizon(uuid) from public;
+revoke all on function private.admin_config(uuid) from public;
+grant execute on function private.admin_float(text, text) to recover_api_owner;
+grant execute on function private.admin_role(text) to recover_api_owner;
+grant execute on function private.admin_day(text) to recover_api_owner;
+grant execute on function private.admin_calendar_horizon(uuid) to recover_api_owner;
+grant execute on function private.admin_config(uuid) to recover_api_owner;
 
 alter function public.api_staff_roster_list(jsonb, text) owner to recover_api_owner;
 alter function public.api_staff_roster_invite(jsonb, text, text, text, text) owner to recover_api_owner;
