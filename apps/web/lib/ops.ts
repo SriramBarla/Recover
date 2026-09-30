@@ -5,7 +5,23 @@
 import { mint } from '@recover/shared/assertion.ts';
 import { sha256Hex } from '@recover/shared/crypto.ts';
 import { PublicError } from '@recover/shared/errors.ts';
-import type { AssertionBundle, Category, RejectReason, StaffRole } from '@recover/shared/dto.ts';
+import type { AssertionBundle, StaffRole } from '@recover/shared/dto.ts';
+import { ALL_CATEGORIES } from '../components/staff/constants.ts';
+
+// Enumerations used by the staff forms live in a client-safe module (no Node imports); re-exported
+// here so routes and tests have one import site.
+export {
+  ALL_CATEGORIES,
+  ASSIGNABLE_ROLES,
+  BLOCK_REASONS,
+  DELETE_REASONS,
+  DISPOSITIONS,
+  MAP_REJECT_REASONS,
+  MEMBER_STATUSES,
+  POST_MODES,
+  PULL_REASONS,
+  REJECT_REASONS,
+} from '../components/staff/constants.ts';
 
 // ---------- roles and operations ----------
 
@@ -492,25 +508,6 @@ export function schoolCodeOf(v: unknown): string {
   if (typeof v !== 'string' || !SCHOOL_CODE_RE.test(v)) throw new PublicError('not_found');
   return v;
 }
-
-// ---------- enumerations used by the staff forms ----------
-
-export const ALL_CATEGORIES: readonly Category[] = [
-  'bag', 'clothing', 'bottle', 'book', 'electronics_low', 'jewelry', 'sports', 'other',
-  'phone', 'wallet', 'keys', 'id_card', 'medication',
-];
-
-export const REJECT_REASONS: readonly RejectReason[] = ['inappropriate', 'not_an_item', 'duplicate', 'pii_visible', 'spam', 'other'];
-
-// Reason codes rather than free text, so no free text can reach audit rows (contract section 0).
-export const PULL_REASONS = ['pii_visible', 'inappropriate', 'not_an_item', 'duplicate', 'owner_request', 'other'] as const;
-export const DELETE_REASONS = ['staff_mistake', 'duplicate', 'test_post', 'other'] as const;
-export const BLOCK_REASONS = ['spam', 'inappropriate', 'abuse', 'other'] as const;
-export const MAP_REJECT_REASONS = ['safety_review', 'image_quality', 'zones', 'locations', 'other'] as const;
-export const DISPOSITIONS = ['donated', 'disposed'] as const;
-export const ASSIGNABLE_ROLES = ['reviewer', 'office', 'school_admin'] as const; // never district_admin (§5.5)
-export const MEMBER_STATUSES = ['active', 'deactivated'] as const;
-export const POST_MODES = ['staff', 'backfill'] as const;
 
 // ---------- structured bodies (jsonb arguments) ----------
 

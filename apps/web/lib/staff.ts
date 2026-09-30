@@ -180,6 +180,10 @@ async function contextFor(r: ResolvedStaff, code: string): Promise<StaffContext 
   return { ...r, school: { id: s.id, code, name: s.name }, role: 'district_admin', isDistrict };
 }
 
+export function scopeOf(ctx: StaffContext): SchoolScope {
+  return { sub: ctx.sub, schoolId: ctx.school.id, code: ctx.school.code };
+}
+
 // Non-redirecting lookup for layouts; pages use requireStaff.
 export const getStaffContext = cache(async (code: string): Promise<StaffContext | null> => {
   if (!SCHOOL_CODE_RE.test(code)) return null;
