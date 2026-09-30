@@ -5,7 +5,7 @@
 // the browser in UTF-16 units, which never exceeds the server's code-point limit.
 import { useEffect, useRef, useState, type ChangeEvent, type TextareaHTMLAttributes } from 'react';
 import { cx, describedBy } from './cx.ts';
-import { Field, type FieldLabelProps } from './field.tsx';
+import { Field, counterState, type FieldLabelProps } from './field.tsx';
 
 export type TextAreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'id'> &
   FieldLabelProps & {
@@ -17,10 +17,6 @@ export type TextAreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'i
 function remaining(left: number): string {
   if (left <= 0) return 'Character limit reached.';
   return left === 1 ? '1 character left.' : `${left} characters left.`;
-}
-
-export function counterState(count: number, max: number, warnAt = 0.9): 'ok' | 'near' | 'full' {
-  return count >= max ? 'full' : count >= Math.floor(max * warnAt) ? 'near' : 'ok';
 }
 
 export function TextArea({

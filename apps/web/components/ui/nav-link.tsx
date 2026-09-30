@@ -4,12 +4,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentProps } from 'react';
-
-export function isCurrentPath(pathname: string, href: string, match: 'exact' | 'prefix' = 'prefix'): boolean {
-  const path = href.split(/[?#]/)[0] ?? href;
-  if (match === 'exact') return pathname === path;
-  return pathname === path || pathname.startsWith(path.endsWith('/') ? path : `${path}/`);
-}
+import { isCurrentPath } from './nav-path.ts';
 
 export function NavLink({ match = 'prefix', ...rest }: ComponentProps<typeof Link> & { match?: 'exact' | 'prefix' }) {
   const pathname = usePathname() ?? '';

@@ -7,7 +7,8 @@ import type { ReactNode } from 'react';
 import { CountBadge } from './badge.tsx';
 import { cx } from './cx.ts';
 import { LogoMark } from './logo.tsx';
-import { NavLink, isCurrentPath } from './nav-link.tsx';
+import { NavLink } from './nav-link.tsx';
+import { isCurrentPath } from './nav-path.ts';
 
 export type NavItem = {
   href: string;

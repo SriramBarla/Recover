@@ -366,6 +366,16 @@ samp {
 .text-danger {
   color: var(--danger);
 }
+/* An icon next to text that stays on one line (table cells, headings, list rows). */
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+.with-icon svg {
+  color: var(--muted);
+}
 
 /* ========================================================================
    6. Layout
@@ -438,6 +448,10 @@ samp {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+.item-grid > li > .card,
+.item-list > li > .card {
+  height: 100%;
 }
 
 /* ========================================================================
@@ -805,6 +819,7 @@ details[open] > summary .school-switcher-chevron {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+  container-type: inline-size;
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 .item-card-media {
@@ -947,11 +962,34 @@ details[open] > summary .school-switcher-chevron {
 .item-card-row .item-card-category {
   display: none;
 }
+/* Two-up cards on small phones (about 140 to 180px wide): tighter padding and type. */
+@container (max-width: 11.5rem) {
+  .item-card .body {
+    gap: 0.2rem;
+    padding: 0.5rem 0.6rem 0.65rem;
+  }
+  .item-card .desc {
+    font-size: 0.9375rem;
+  }
+  .item-card-meta {
+    font-size: 0.8125rem;
+  }
+  .item-card-meta svg {
+    width: 14px;
+    height: 14px;
+  }
+  .item-card-category {
+    left: 0.35rem;
+    top: 0.35rem;
+    font-size: 0.6875rem;
+  }
+}
 
 /* ========================================================================
    10. Buttons
    ======================================================================== */
 .btn {
+  position: relative;
   appearance: none;
   border: 1px solid var(--border-strong);
   background: var(--surface);
@@ -1611,7 +1649,9 @@ button.chip-sm {
 /* ========================================================================
    15. Tables
    ======================================================================== */
+/* position: relative keeps visually-hidden text inside the scroller (otherwise it widens the page). */
 .table-wrap {
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1635,6 +1675,10 @@ button.chip-sm {
   text-align: left;
   padding: 0.6rem 0.75rem;
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table-top th,
+.table-top td {
   vertical-align: top;
 }
 .table thead th {
@@ -1665,6 +1709,10 @@ button.chip-sm {
 .table .actions {
   text-align: right;
   white-space: nowrap;
+}
+.table .actions .button-row {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 .table-dense th,
 .table-dense td {
@@ -1886,8 +1934,6 @@ button.chip-sm {
    ======================================================================== */
 .logo-mark {
   display: block;
-  width: 30px;
-  height: 30px;
   flex: none;
 }
 .logo-mark .lm-bg {
@@ -2196,6 +2242,8 @@ ul.photo-slots {
   color: #fff;
   font-size: var(--text-xs);
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .photo-status svg {
   width: 14px;
@@ -2223,14 +2271,30 @@ ul.photo-slots {
   min-height: var(--target);
   padding: 0.25rem;
 }
+.photo-status-short {
+  display: none;
+}
+/* Phones: three slots are about 100px wide, so actions go icon-only (names stay spoken). */
 @container (max-width: 26rem) {
-  .photo-actions .btn-label {
+  .photo-actions .btn-label,
+  .photo-status-word,
+  .photo-slot-sub {
     position: absolute !important;
     width: 1px !important;
     height: 1px !important;
     overflow: hidden !important;
     clip-path: inset(50%) !important;
     white-space: nowrap !important;
+  }
+  .photo-status-short {
+    display: inline;
+  }
+  .photo-slot-add {
+    font-size: var(--text-sm);
+  }
+  .photo-slot-add svg {
+    width: 24px;
+    height: 24px;
   }
 }
 

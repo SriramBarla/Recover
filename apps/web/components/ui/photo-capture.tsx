@@ -45,7 +45,10 @@ function StatusOverlay({ photo, n }: { photo: CapturedPhoto; n: number }) {
     return (
       <span className="photo-status" data-status="error">
         <IconAlertCircle size={14} />
-        {photo.error ?? 'Upload failed'}
+        <span className="photo-status-word">{photo.error ?? 'Upload failed'}</span>
+        <span className="photo-status-short" aria-hidden="true">
+          Failed
+        </span>
       </span>
     );
   }
@@ -57,14 +60,13 @@ function StatusOverlay({ photo, n }: { photo: CapturedPhoto; n: number }) {
       </span>
     );
   }
-  const label = s === 'processing' ? 'Preparing' : 'Uploading';
+  const pct = s === 'uploading' && photo.progress !== undefined ? ` ${Math.round(Math.min(Math.max(photo.progress, 0), 100))}%` : '';
   return (
     <span className="photo-status" data-status={s}>
       <span className="btn-spinner" aria-hidden="true" />
-      {label}
-      {s === 'uploading' && photo.progress !== undefined ? (
-        <progress className="progress-bar" max={100} value={photo.progress} aria-label={`Photo ${n} upload progress`} />
-      ) : null}
+      <span className={pct ? 'photo-status-word' : undefined}>{s === 'processing' ? 'Preparing' : 'Uploading'}</span>
+      {pct}
+      <span className="visually-hidden"> photo {n}</span>
     </span>
   );
 }
@@ -189,7 +191,7 @@ export function PhotoCapture({
                     )}
                     <button
                       type="button"
-                      className="btn btn-sm btn-ghost"
+                      className="btn btn-sm btn-secondary"
                       onClick={() => remove(i)}
                       aria-label={`Remove photo ${n}`}
                       disabled={busy}

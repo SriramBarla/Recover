@@ -11,10 +11,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { cx } from './cx.ts';
 import { IconBuilding, IconChevronDown, IconMapPin, IconX } from './icons.tsx';
+import { nearestZone, zoneBox, type MapMarker, type MapPoint, type MapZone } from './map-geometry.ts';
 
-export type MapPoint = { x: number; y: number };
-export type MapZone = { id: string; name: string; cx: number; cy: number; radius: number };
-export type MapMarker = { id: string; x: number; y: number; label: string };
+export type { MapMarker, MapPoint, MapZone } from './map-geometry.ts';
 
 export type MapPickerProps = {
   src: string;
@@ -50,22 +49,6 @@ function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
 }
 
-// Mirrors private.resolve_zone: nearest active zone whose aspect-scaled distance is within its radius.
-export function nearestZone(zones: readonly MapZone[], p: MapPoint | null, width: number, height: number): MapZone | null {
-  if (!p || zones.length === 0 || width <= 0 || height <= 0) return null;
-  const scale = Math.max(width, height);
-  let best: MapZone | null = null;
-  let bestD = Number.POSITIVE_INFINITY;
-  for (const z of zones) {
-    const d = Math.hypot((p.x - z.cx) * width, (p.y - z.cy) * height) / scale;
-    if (d <= z.radius && d < bestD) {
-      best = z;
-      bestD = d;
-    }
-  }
-  return best;
-}
-
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
@@ -76,17 +59,16 @@ function describe(p: MapPoint, zone: MapZone | null): string {
 }
 
 function ZoneShape({ zone, width, height, highlight }: { zone: MapZone; width: number; height: number; highlight: boolean }) {
-  const scale = Math.max(width, height);
-  const rw = (zone.radius * scale) / width;
-  const rh = (zone.radius * scale) / height;
+  const b = zoneBox(zone, width, height);
   return (
     <>
       <span
         className="map-zone"
         data-highlight={highlight ? 'true' : undefined}
-        style={{ left: `${(zone.cx - rw) * 100}%`, top: `${(zone.cy - rh) * 100}%`, width: `${rw * 200}%`, height: `${rh * 200}%` }}
+        style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.width}%`, height: `${b.height}%` }}
       />
-      <span className="map-zone-label" style={{ left: `${zone.cx * 100}%`, top: `${zone.cy * 100}%` }}>
+      {/* On the circle's top edge, so the map's own label at the center stays readable. */}
+      <span className="map-zone-label" style={{ left: `${zone.cx * 100}%`, top: `${Math.max(b.top, 4)}%` }}>
         {zone.name}
       </span>
     </>

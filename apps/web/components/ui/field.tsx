@@ -15,6 +15,11 @@ export type ControlProps = {
   required?: boolean;
 };
 
+// Counter tone for a length limit: 'near' from warnAt (90%) of the limit, 'full' at the limit.
+export function counterState(count: number, max: number, warnAt = 0.9): 'ok' | 'near' | 'full' {
+  return count >= max ? 'full' : count >= Math.floor(max * warnAt) ? 'near' : 'ok';
+}
+
 export function fieldIds(id: string) {
   return { hint: `${id}-hint`, error: `${id}-error`, counter: `${id}-counter`, private: `${id}-private` };
 }
