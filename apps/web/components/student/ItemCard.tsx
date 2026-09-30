@@ -1,10 +1,8 @@
 // Feed/search thumbnail card. No hooks, so both Server Components and the client "Load more" list use it.
-// The card body is a div, not an <article>: Chrome computes no accessible name for a link that wraps
-// an article landmark, so screen readers heard an unnamed link (found by tests/e2e a11y).
 // Links do not prefetch: a grid of 30 listings must not become 30 origin renders during dismissal peaks.
-import Link from 'next/link';
+// Presentation is the shared design-system card (fixed-size thumb, category, zone, custody line, ID).
 import type { PublicItem } from '@recover/shared/dto.ts';
-import { categoryLabel, custodyLine, photoAlt } from './format.ts';
+import { ItemCard as Card } from '@/components/ui/item-card.tsx';
 
 export function ItemCard({
   item,
@@ -19,34 +17,24 @@ export function ItemCard({
   locationName: string | null;
   foundLabel: string;
   eager?: boolean;
+  // Replaces the custody line, e.g. "At another school (SFHS)" in cross-school results.
   extra?: string;
 }) {
   const photo = item.photos[0];
   return (
-    <Link href={href} prefetch={false} className="card-link">
-      <div className="card item-card">
-        {photo ? (
-          <img
-            className="thumb"
-            src={photo.thumbUrl}
-            alt={photoAlt(item.category)}
-            width={400}
-            height={400}
-            loading={eager ? 'eager' : 'lazy'}
-            decoding="async"
-          />
-        ) : (
-          <div className="thumb" aria-hidden="true" />
-        )}
-        <div className="body">
-          <p className="desc">{item.description}</p>
-          <p className="small muted">
-            {categoryLabel(item.category)}
-            {foundLabel ? ` · Found ${foundLabel}` : ''}
-          </p>
-          <p className="small">{extra ?? custodyLine(item.custody, locationName)}</p>
-        </div>
-      </div>
-    </Link>
+    <Card
+      href={href}
+      prefetch={false}
+      publicId={item.publicId}
+      category={item.category}
+      description={item.description}
+      photo={photo ? { url: photo.thumbUrl, width: photo.width, height: photo.height } : null}
+      zoneName={item.zoneName}
+      custody={item.custody}
+      locationName={locationName}
+      custodyLabel={extra}
+      foundLabel={foundLabel ? `Found ${foundLabel}` : undefined}
+      priority={eager}
+    />
   );
 }

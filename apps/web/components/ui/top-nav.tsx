@@ -28,6 +28,8 @@ export type TopNavProps = {
   currentPath?: string;
   navLabel?: string;
   end?: ReactNode;
+  // Student pages pass false: a nav on every page must not multiply origin renders at peaks.
+  prefetch?: boolean;
   className?: string;
 };
 
@@ -41,12 +43,12 @@ function Inner({ item }: { item: NavItem }) {
   );
 }
 
-export function TopNav({ homeHref, brandContext, context, items, currentPath, navLabel = 'Main', end, className }: TopNavProps) {
+export function TopNav({ homeHref, brandContext, context, items, currentPath, navLabel = 'Main', end, prefetch, className }: TopNavProps) {
   return (
     <header className={cx('topbar', className)}>
       <div className="container">
         <div className="topbar-start">
-          <Link className="brand" href={homeHref}>
+          <Link className="brand" href={homeHref} prefetch={prefetch}>
             <LogoMark />
             <span className="brand-name">Recover</span>
             {brandContext ? <span className="brand-context">{brandContext}</span> : null}
@@ -60,11 +62,15 @@ export function TopNav({ homeHref, brandContext, context, items, currentPath, na
               {items.map((item) => (
                 <li key={item.href}>
                   {currentPath === undefined ? (
-                    <NavLink href={item.href} match={item.match}>
+                    <NavLink href={item.href} match={item.match} prefetch={prefetch}>
                       <Inner item={item} />
                     </NavLink>
                   ) : (
-                    <Link href={item.href} aria-current={isCurrentPath(currentPath, item.href, item.match) ? 'page' : undefined}>
+                    <Link
+                      href={item.href}
+                      prefetch={prefetch}
+                      aria-current={isCurrentPath(currentPath, item.href, item.match) ? 'page' : undefined}
+                    >
                       <Inner item={item} />
                     </Link>
                   )}

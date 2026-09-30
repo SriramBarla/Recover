@@ -427,14 +427,17 @@ samp {
   gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
 }
+/* List resets at zero specificity, so layout helpers such as .stack still space these lists. */
+:where(.item-grid, .item-list, .tile-grid, ul.photo-slots) {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 /* Item feeds: always two columns on phones (320px and up), more as space allows. */
 .item-grid {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fill, minmax(min(11rem, calc(50% - 0.375rem)), 1fr));
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 @media (min-width: 40rem) {
   .item-grid {
@@ -445,9 +448,6 @@ samp {
 .item-list {
   display: grid;
   gap: 0.75rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 .item-grid > li > .card,
 .item-list > li > .card {
@@ -576,6 +576,15 @@ dd,
 .nav a[aria-current='page'] svg {
   color: currentColor;
 }
+/* Phones: drop nav icons and tighten padding so a three-link nav fits on one row. */
+@media (max-width: 30rem) {
+  .nav a {
+    padding: 0.5rem 0.6rem;
+  }
+  .nav a svg {
+    display: none;
+  }
+}
 
 /* School context: which school a staff member is acting on, always visible. */
 .school-switcher {
@@ -682,6 +691,62 @@ details[open] > summary .school-switcher-chevron {
 .school-switcher-menu a[aria-current='true'] {
   background: var(--brand-soft);
   font-weight: 700;
+}
+
+/* Search bar: one wide field with a leading icon, then the button. */
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.search-field {
+  position: relative;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.search-field .input {
+  padding-left: 2.6rem;
+}
+.search-icon {
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+/* Filters: a quiet panel of selects that wraps to one column on phones. */
+.filter-bar {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  align-items: end;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.filter-bar > * {
+  min-width: 0;
+}
+/* A native disclosure around .filter-bar: closed by default, open while filters are active. */
+.filter-summary {
+  list-style: none;
+  width: fit-content;
+}
+.filter-summary::-webkit-details-marker {
+  display: none;
+}
+.filter-chevron {
+  color: var(--muted);
+  transition: transform var(--dur) var(--ease);
+}
+.filter-panel[open] > .filter-summary .filter-chevron {
+  transform: rotate(180deg);
+}
+.filter-panel[open] > .filter-bar {
+  margin-top: 0.75rem;
 }
 
 /* ========================================================================
@@ -924,14 +989,13 @@ details[open] > summary .school-switcher-chevron {
 .item-card:has(.item-card-link):hover .item-card-link {
   text-decoration: underline;
 }
-@supports selector(:has(a)) {
-  .item-card-link:focus-visible {
-    outline: none;
-  }
-  .item-card:has(.item-card-link:focus-visible) {
-    outline: 3px solid var(--focus);
-    outline-offset: 2px;
-  }
+/* The link keeps its own ring (the focused element must show focus); the card echoes it. */
+.item-card-link:focus-visible {
+  border-radius: var(--radius-xs);
+}
+.item-card:has(.item-card-link:focus-visible) {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), var(--shadow-lg);
 }
 .item-card-meta {
   display: grid;
@@ -1340,9 +1404,6 @@ details[open] > summary .school-switcher-chevron {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fill, minmax(min(9.5rem, calc(50% - 0.375rem)), 1fr));
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 .tile {
   appearance: none;
@@ -2188,11 +2249,6 @@ button.chip-sm {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
-}
-ul.photo-slots {
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 .photo-item {
   display: grid;

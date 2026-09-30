@@ -3,11 +3,11 @@
 // connection() forces request-time rendering: the proxy's CSP nonce only reaches dynamically rendered
 // HTML, so no student page may be prerendered or cached as HTML.
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { connection } from 'next/server';
 import type { Meta } from '@recover/shared/dto.ts';
 import { ClientRuntime } from '@/components/student/ClientRuntime.tsx';
-import { SchoolNav } from '@/components/student/SchoolNav.tsx';
+import { IconHome, IconSearch, IconTag } from '@/components/ui/icons.tsx';
+import { TopNav } from '@/components/ui/top-nav.tsx';
 import { getMeta } from '@/lib/cache.ts';
 
 export default async function SchoolLayout({ children, params }: { children: ReactNode; params: Promise<{ code: string }> }) {
@@ -21,16 +21,24 @@ export default async function SchoolLayout({ children, params }: { children: Rea
   } catch {
     meta = null;
   }
+  const school = meta?.school.code;
   return (
     <>
-      <header className="topbar">
-        <div className="container">
-          <Link className="brand" href={meta ? `/s/${meta.school.code}` : '/'} prefetch={false}>
-            {meta ? meta.school.name : 'Recover'}
-          </Link>
-          {meta && <SchoolNav code={meta.school.code} />}
-        </div>
-      </header>
+      <TopNav
+        homeHref={school ? `/s/${school}` : '/'}
+        brandContext={meta ? meta.school.name : null}
+        navLabel="Recover"
+        prefetch={false}
+        items={
+          school
+            ? [
+                { href: `/s/${school}`, label: 'Found items', icon: <IconHome />, match: 'exact' },
+                { href: `/s/${school}/lost/mine`, label: 'Your reports', icon: <IconSearch /> },
+                { href: `/s/${school}/mine`, label: 'Your posts', icon: <IconTag /> },
+              ]
+            : []
+        }
+      />
       <main id="main" className="container">
         {children}
       </main>

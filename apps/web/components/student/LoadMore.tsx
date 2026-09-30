@@ -3,6 +3,9 @@
 // (created_at, id)). Focus moves to the first new card so keyboard users continue where they were.
 import { useEffect, useRef, useState } from 'react';
 import type { PublicItem } from '@recover/shared/dto.ts';
+import { Button } from '@/components/ui/button.tsx';
+import { IconChevronDown } from '@/components/ui/icons.tsx';
+import { Notice } from '@/components/ui/notice.tsx';
 import { ItemCard } from './ItemCard.tsx';
 import { apiFetch } from './client-api.ts';
 import { formatDay } from './format.ts';
@@ -56,7 +59,7 @@ export function LoadMore({
   return (
     <>
       {items.length > 0 && (
-        <ul className="grid" ref={listRef} aria-label="More found items" style={{ listStyle: 'none', padding: 0, marginTop: '0.75rem' }}>
+        <ul className="item-grid" ref={listRef} aria-label="More found items" style={{ marginTop: '0.75rem' }}>
           {items.map((item) => (
             <li key={item.id}>
               <ItemCard
@@ -73,14 +76,14 @@ export function LoadMore({
         {status}
       </p>
       {error && (
-        <p className="notice notice-danger" role="alert">
+        <Notice tone="danger" live="assertive" style={{ marginTop: '1rem' }}>
           {error}
-        </p>
+        </Notice>
       )}
       {next && (
-        <button type="button" className="btn btn-block" onClick={load} disabled={busy} style={{ marginTop: '1rem' }}>
+        <Button block onClick={load} disabled={busy} style={{ marginTop: '1rem' }} icon={<IconChevronDown />}>
           {busy ? 'Loading...' : 'Load more'}
-        </button>
+        </Button>
       )}
     </>
   );
