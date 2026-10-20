@@ -82,7 +82,7 @@ postgresql://recover_worker.<ref>:<password>@<pooler-host>:6543/postgres
 | `recover-web` | `apps/web` | web DB login, Auth.js, assertion key, device/IP/search keys |
 | `recover-worker` | `apps/worker` | worker DB login, **S3 key**, content key, scheduler hash, OIDC pins, GCP WIF |
 
-1. **Build settings.** For each project run `vercel link` from the repo root and choose the root directory above. The framework is Next.js, the install command is `npm ci` (run at the repository root through workspaces), and the Node.js version is 22.x.
+1. **Build settings.** For each project run `vercel link` from the repo root and choose the root directory above. The framework is Next.js, the install command is `cd ../.. && npm ci`, and the Node.js version is 22.x. A plain `npm ci` runs inside the root directory, where npm installs only that workspace's packages and skips the root dev dependencies (TypeScript among them), so the build fails. Deploy from a checkout outside iCloud-synced folders; the CLI hangs on files that macOS has evicted to iCloud. The repository's `.vercelignore` keeps secrets, agent worktrees, and the spec library out of the upload.
 2. **OIDC.** In Team Settings > Security > OIDC Federation, enable team issuer mode. `recover-web` forwards the OIDC token Vercel gives it, so the web project needs no OIDC setting. On the worker, set `WEB_OIDC_ISSUER` (`https://oidc.vercel.com/<team-slug>`), `WEB_OIDC_AUDIENCE` (`https://vercel.com/<team-slug>`), `WEB_PROJECT_ID`, and `WEB_OWNER_ID` (F-93, F-121). Confirm the claims on the first deployment ([VERIFY] V-3).
 3. **Environment variables.** Set each project's variables from `.env.example` with `vercel env add <NAME> production`:
    - Never put `SUPABASE_S3_*` into `recover-web`.

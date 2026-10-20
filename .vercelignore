@@ -1,0 +1,20 @@
+# Vercel CLI uploads. When this file exists the CLI stops reading .gitignore, so it must list
+# everything that stays local: secrets, agent worktrees, build output, and the spec library.
+.git
+.claude
+node_modules
+.next
+.env
+.env.*
+*.tsbuildinfo
+*.log
+coverage
+.DS_Store
+test-results
+tests
+supabase/.temp
+supabase/.branches
+files (16)
+implementations
+worktrees
+posters
