@@ -4,6 +4,7 @@ import { IconBuilding } from '@/components/ui/icons.tsx';
 import { sectionIcon } from '@/components/staff/nav-icons.tsx';
 import { SessionKeepAlive } from '@/components/staff/SessionKeepAlive.tsx';
 import { TopBar } from '@/components/staff/TopBar.tsx';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { isDistrictAdmin, resolveStaff } from '@/lib/staff.ts';
 
 const ITEMS = [
@@ -13,6 +14,8 @@ const ITEMS = [
   { href: '/district/settings', label: 'Settings', icon: sectionIcon('settings') },
   { href: '/district/stats', label: 'Stats', icon: sectionIcon('stats') },
 ];
+// Pilot (lib/features.ts): only map approvals stay, for the Recover admin.
+const PILOT_ITEMS = ITEMS.filter((i) => i.href === '/district/maps');
 
 export default async function DistrictLayout({ children }: LayoutProps<'/district'>) {
   // Chrome only: a failed lookup renders the header without nav; the page reports the error.
@@ -22,8 +25,8 @@ export default async function DistrictLayout({ children }: LayoutProps<'/distric
     <>
       <TopBar
         brandHref="/district"
-        context={{ label: 'Acting for', name: 'The whole district' }}
-        items={ok ? ITEMS : []}
+        context={DISTRICT_ENABLED ? { label: 'Acting for', name: 'The whole district' } : { label: 'Recover admin', name: 'Map approvals' }}
+        items={ok ? (DISTRICT_ENABLED ? ITEMS : PILOT_ITEMS) : []}
         navLabel="District sections"
         userLabel={r ? (r.user.displayName ?? r.user.email) : null}
         links={

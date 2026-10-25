@@ -3,13 +3,14 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Badge } from '@/components/ui/badge.tsx';
 import { buttonClass } from '@/components/ui/button.tsx';
-import { IconAlert, IconBuilding, IconChevronRight, IconShield } from '@/components/ui/icons.tsx';
+import { IconAlert, IconBuilding, IconChevronRight, IconShield, IconMap } from '@/components/ui/icons.tsx';
 import { Notice } from '@/components/ui/notice.tsx';
 import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { ROLE_LABELS } from '@/components/staff/format.ts';
 import { SessionKeepAlive } from '@/components/staff/SessionKeepAlive.tsx';
 import { TopBar } from '@/components/staff/TopBar.tsx';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { districtSchools, isDistrictAdmin, load, resolveStaff, schoolMemberships, signinPath } from '@/lib/staff.ts';
 
 export const metadata: Metadata = { title: 'Choose a school - Recover' };
@@ -30,10 +31,17 @@ export default async function StaffHome() {
         userLabel={r.user.displayName ?? r.user.email}
         links={
           district ? (
-            <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/district">
-              <IconShield />
-              District admin
-            </a>
+            DISTRICT_ENABLED ? (
+              <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/district">
+                <IconShield />
+                District admin
+              </a>
+            ) : (
+              <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/district/maps">
+                <IconMap />
+                Map approvals
+              </a>
+            )
           ) : null
         }
       />
@@ -67,10 +75,10 @@ export default async function StaffHome() {
         ) : null}
         {all ? (
           <section className="stack">
-            <h2>All schools (district admin)</h2>
+            <h2>{DISTRICT_ENABLED ? 'All schools (district admin)' : 'All schools'}</h2>
             {all.ok ? (
               all.data.length === 0 ? (
-                <p className="muted">No schools yet. Create one under District admin.</p>
+                <p className="muted">{DISTRICT_ENABLED ? 'No schools yet. Create one under District admin.' : 'No schools yet.'}</p>
               ) : (
                 <ul className="grid">
                   {all.data.map((s) => (

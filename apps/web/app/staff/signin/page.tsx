@@ -1,5 +1,6 @@
 // /staff/signin: Google sign-in (and the dev-only email login when enabled). Also the Auth.js error
 // page, and the step-up destination for destructive actions (G-31: ?reauth=1).
+import { districtOr } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { devSignInAction, googleSignInAction } from '@/components/staff/actions.ts';
 import { Button } from '@/components/ui/button.tsx';
@@ -18,12 +19,12 @@ const ERRORS: Record<string, string> = {
   not_set_up: NOT_SET_UP,
   AccessDenied: NOT_SET_UP,
   CredentialsSignin: NOT_SET_UP,
-  domain: 'Please sign in with your district Google account.',
+  domain: districtOr('Please sign in with your district Google account.', 'Please sign in with your school Google account.'),
   unverified: 'Your Google account email address is not verified.',
   denied: 'That sign-in was not allowed.',
   unavailable: 'Recover could not finish signing you in right now. Please try again in a few minutes.',
   expired: 'Your session ended. Please sign in again.',
-  Configuration: 'Sign-in is not configured correctly. Please contact district IT.',
+  Configuration: districtOr('Sign-in is not configured correctly. Please contact district IT.', 'Sign-in is not configured correctly. Please tell your school admin.'),
   OAuthSignin: 'Google sign-in could not start. Please try again.',
   OAuthCallbackError: 'Google sign-in was cancelled or failed. Please try again.',
   Callback: 'Google sign-in was cancelled or failed. Please try again.',
@@ -48,7 +49,7 @@ export default async function SignInPage({ searchParams }: PageProps<'/staff/sig
       <div className="stack">
         <Logo size={40} />
         <h1>Recover staff sign in</h1>
-        <p className="muted">For school staff and district administrators. Students do not need an account.</p>
+        <p className="muted">{districtOr('For school staff and district administrators. Students do not need an account.', 'For school staff. Students do not need an account.')}</p>
       </div>
       {reauth ? (
         <Notice tone="warning" live="polite" title="Sign in again to continue">
@@ -73,7 +74,7 @@ export default async function SignInPage({ searchParams }: PageProps<'/staff/sig
         )}
         <p className="hint with-icon" style={{ whiteSpace: 'normal' }}>
           <IconLock size={16} />
-          Use your district Google account. Recover never asks for your password.
+          {districtOr('Use your district Google account.', 'Use your school Google account.')} Recover never asks for your password.
         </p>
       </div>
       {dev ? (

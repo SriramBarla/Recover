@@ -1,8 +1,11 @@
 // GET /api/district/stats?from&to: district dashboard, per school (§5.6, §17).
+import { PublicError } from '@recover/shared/errors.ts';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { rangeOf } from '@/lib/ops.ts';
 import { apiDistrict, districtCall, handler, ok } from '@/lib/staff.ts';
 
 export const GET = handler<Record<string, never>>('district.stats', async (req, _p, rid) => {
+  if (!DISTRICT_ENABLED) throw new PublicError('not_found'); // pilot (lib/features.ts)
   const s = await apiDistrict();
   const sp = req.nextUrl.searchParams;
   const { from, to } = rangeOf(sp.get('from'), sp.get('to'));

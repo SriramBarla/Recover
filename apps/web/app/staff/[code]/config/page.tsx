@@ -1,5 +1,6 @@
 // /staff/[code]/config: school switches, retention, never-arrived days, categories, and the
 // operating calendar (§5.5, §24).
+import { districtOr } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { CalendarUpload } from '@/components/staff/CalendarUpload.tsx';
 import { ConfigForm } from '@/components/staff/ConfigForm.tsx';
@@ -18,7 +19,7 @@ export default async function ConfigPage({ params }: PageProps<'/staff/[code]/co
 
   return (
     <>
-      <PageHeader title={<>School settings</>} description={<>A district switch that is off always wins over the school setting.</>} />
+      <PageHeader title={<>School settings</>} description={districtOr(<>A district switch that is off always wins over the school setting.</>, <>Student features also need the Recover admin to switch them on for the pilot.</>)} />
       {config.ok ? (
         <>
           <ConfigForm code={code} config={config.data} />

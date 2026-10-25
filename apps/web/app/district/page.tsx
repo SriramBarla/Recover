@@ -1,5 +1,7 @@
 // /district: overview with system health and in-app alerts (§17: the dashboard banner is the only
 // alert channel; nobody is paged) plus the school list.
+import { redirect } from 'next/navigation';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -50,6 +52,8 @@ function tiles(h: Health): Tile[] {
 const SEVERITY_TONE: Record<string, Tone> = { critical: 'danger', high: 'danger', warning: 'warn', warn: 'warn', info: 'brand' };
 
 export default async function DistrictOverview() {
+  // Pilot: the district overview is hidden; the Recover admin lands on map approvals.
+  if (!DISTRICT_ENABLED) redirect('/district/maps');
   const r = await requireDistrict('/district');
   const [health, alerts, schools] = await Promise.all([
     load('page.district.health', () => api<Health>('api_health')),

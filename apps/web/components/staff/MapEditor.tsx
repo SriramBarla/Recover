@@ -1,5 +1,6 @@
 'use client';
 
+import { districtOr } from '@/lib/features.ts';
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button.tsx';
@@ -20,7 +21,7 @@ type Props = { code: string; versions: MapVersionRow[]; tz: string | null };
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
-  pending_district: 'Waiting for district',
+  pending_district: districtOr('Waiting for district', 'Waiting for approval'),
   approved: 'Approved',
   rejected: 'Sent back',
   retired: 'Retired',
@@ -136,7 +137,7 @@ function VersionPanel({ code, v, tz, onChanged }: { code: string; v: MapVersionR
         </p>
         {v.approvalStatus === 'rejected' ? (
           <Notice tone="warning">
-            The district sent this version back{v.rejectedReason ? `: ${label(MAP_REJECT_REASON_LABELS, v.rejectedReason)}` : '.'} Create a new draft with the changes.
+            {districtOr('The district', 'The Recover admin')} sent this version back{v.rejectedReason ? `: ${label(MAP_REJECT_REASON_LABELS, v.rejectedReason)}` : '.'} Create a new draft with the changes.
           </Notice>
         ) : null}
         {!draft ? <p className="hint">Only drafts can change. Zones on this version are frozen.</p> : null}
@@ -237,16 +238,16 @@ function VersionPanel({ code, v, tz, onChanged }: { code: string; v: MapVersionR
 
       {draft ? (
         <div className="stack">
-          <h3>Submit for district approval</h3>
-          <p className="hint">The district reviews the map and zone package, then activates it. Every active pickup location needs a pin on this version first (Locations page).</p>
+          <h3>{districtOr('Submit for district approval', 'Submit for approval')}</h3>
+          <p className="hint">{districtOr('The district reviews', 'The Recover admin reviews')} the map and zone package, then activates it. Every active pickup location needs a pin on this version first (Locations page).</p>
           <ConfirmButton
             label="Submit for approval"
-            prompt="Submit this map and its zones to the district? You cannot edit it after submitting."
+            prompt={districtOr('Submit this map and its zones to the district? You cannot edit it after submitting.', 'Submit this map and its zones for approval? You cannot edit it after submitting.')}
             confirmLabel="Submit"
             disabled={!processed || v.zones.length === 0}
             onConfirm={async () => {
               await staffApi(`/api/staff/${code}/maps/${v.id}/submit`, { body: {} });
-              onChanged('Submitted. The district will review it.');
+              onChanged(districtOr('Submitted. The district will review it.', 'Submitted. The Recover admin will review it.'));
             }}
           />
           {!processed || v.zones.length === 0 ? <p className="hint">Upload a processed image and add at least one zone before submitting.</p> : null}

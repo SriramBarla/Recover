@@ -1,5 +1,7 @@
 // /district/stats: adoption, recovery, queue age, abuse, and cost drivers per school (§5.6, §17),
 // printable as the weekly report.
+import { notFound } from 'next/navigation';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/ui/page-header.tsx';
 import { ErrorNotice } from '@/components/staff/ErrorNotice.tsx';
@@ -12,6 +14,8 @@ import { districtCall, load, requireDistrict, signinPath } from '@/lib/staff.ts'
 export const metadata: Metadata = { title: 'District stats - Recover' };
 
 export default async function DistrictStats({ searchParams }: PageProps<'/district/stats'>) {
+  // Pilot: hidden until the district approves Recover (lib/features.ts).
+  if (!DISTRICT_ENABLED) notFound();
   const r = await requireDistrict('/district/stats');
   const sp = await searchParams;
   let range: { from: string; to: string };

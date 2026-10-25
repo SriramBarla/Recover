@@ -1,8 +1,10 @@
 // GET /api/district/alerts?limit: in-app alerts written by system_evaluate_alerts (§17).
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { PublicError } from '@recover/shared/errors.ts';
 import { apiDistrict, districtCall, handler, ok } from '@/lib/staff.ts';
 
 export const GET = handler<Record<string, never>>('district.alerts', async (req, _p, rid) => {
+  if (!DISTRICT_ENABLED) throw new PublicError('not_found'); // pilot (lib/features.ts)
   const s = await apiDistrict();
   const raw = req.nextUrl.searchParams.get('limit');
   const limit = raw === null ? 50 : Number(raw);

@@ -1,5 +1,6 @@
 'use client';
 
+import { DISTRICT_ENABLED, districtOr } from '@/lib/features.ts';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STUDENT_CATEGORIES } from '@recover/shared/dto.ts';
@@ -42,8 +43,8 @@ export function ConfigForm({ code, config }: Props) {
   const ceiling = config.retentionCeiling ?? 365;
   const retentionOk = retention >= floor && retention <= ceiling;
 
-  const globalOff = (v: boolean | null) => (v === false ? <Badge tone="warn">Off district-wide</Badge> : null);
-  const range = `District range: ${floor} to ${ceiling} days.`;
+  const globalOff = (v: boolean | null) => (v === false ? <Badge tone="warn">{districtOr('Off district-wide', 'Not switched on yet')}</Badge> : null);
+  const range = `${districtOr('District range', 'Allowed range')}: ${floor} to ${ceiling} days.`;
 
   return (
     <section className="card card-pad-lg stack-lg" aria-labelledby="settings-h">
@@ -67,12 +68,15 @@ export function ConfigForm({ code, config }: Props) {
             Students can file lost reports {globalOff(config.globalLostReports)}
           </span>
         </label>
-        <label className="choice">
-          <input type="checkbox" checked={crossSchool} onChange={(e) => setCrossSchool(e.target.checked)} />
-          <span>
-            Include this school in cross-school search {globalOff(config.globalCrossSchoolSearch)}
-          </span>
-        </label>
+        {/* Pilot (lib/features.ts): one school, so cross-school search is hidden. */}
+        {DISTRICT_ENABLED ? (
+          <label className="choice">
+            <input type="checkbox" checked={crossSchool} onChange={(e) => setCrossSchool(e.target.checked)} />
+            <span>
+              Include this school in cross-school search {globalOff(config.globalCrossSchoolSearch)}
+            </span>
+          </label>
+        ) : null}
       </Fieldset>
       <div className="grid-wide">
         <TextInput
