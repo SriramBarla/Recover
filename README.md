@@ -10,6 +10,8 @@ District-wide school lost-and-found.
 
 > **Status:** under active construction. The foundation, database, worker, student app, and staff app are being built on feature branches and merged through pull requests. See [Build status](#build-status).
 
+**Look:** Forsyth Central colors (cardinal red, black, and white) with Archivo type, built to fit a phone or laptop screen with little scrolling. See `docs/DESIGN.md` and `/styleguide` in development.
+
 ## How it works
 
 ```
