@@ -47,8 +47,9 @@ export default async function ListingPage({ params }: Props) {
   const atOffice = item.custody === 'at_location';
 
   return (
-    <article className="stack-lg container-narrow" style={{ padding: 0 }}>
+    <article className="listing">
       <PageHeader
+        className="listing-head"
         back={{ href: `/s/${code}`, label: 'Back to all found items', prefetch: false }}
         eyebrow={
           <span className="with-icon">
@@ -71,7 +72,7 @@ export default async function ListingPage({ params }: Props) {
       </PageHeader>
 
       {item.photos.length > 0 ? (
-        <div className="stack">
+        <div className="listing-media stack">
           {item.photos.map((p, i) => {
             const size = scaled(p.width, p.height);
             return (
@@ -90,7 +91,7 @@ export default async function ListingPage({ params }: Props) {
           })}
         </div>
       ) : (
-        <div className="listing-photo listing-photo-empty">
+        <div className="listing-media listing-photo listing-photo-empty">
           <CategoryIcon category={item.category} size={48} />
           <p className="muted" style={{ margin: 0 }}>
             No photo for this item.
@@ -98,6 +99,7 @@ export default async function ListingPage({ params }: Props) {
         </div>
       )}
 
+      <div className="listing-details stack-lg">
       <Card padding="lg">
         <KeyValue
           items={[
@@ -125,6 +127,7 @@ export default async function ListingPage({ params }: Props) {
           </p>
         </div>
       </section>
+      </div>
     </article>
   );
 }

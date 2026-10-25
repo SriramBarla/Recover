@@ -28,6 +28,7 @@ export default async function SchoolLayout({ children, params }: { children: Rea
         homeHref={school ? `/s/${school}` : '/'}
         brandContext={meta ? meta.school.name : null}
         navLabel="Recover"
+        className="topbar-student"
         prefetch={false}
         items={
           school
@@ -42,7 +43,7 @@ export default async function SchoolLayout({ children, params }: { children: Rea
       <main id="main" className="container">
         {children}
       </main>
-      <footer className="footer">
+      <footer className="footer student-shell">
         <p>Recover school lost and found. Questions? Ask at the front office.</p>
       </footer>
       <ClientRuntime />

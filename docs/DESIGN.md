@@ -6,25 +6,26 @@ Owner: design. Pages own their data and flows; this system owns how they look, r
 
 ## 1. Principles
 
-1. **Calm and trustworthy.** Warm paper neutrals, one deep teal brand, one warm accent. Nothing shouts except a real problem.
+1. **Forsyth Central, plainly.** Cardinal red, black, and white on cool neutral grays. A black header band with a red stripe carries the school identity; red marks the primary action. Notices are neutral, so nothing else shouts except a real problem.
 2. **Fast at dismissal.** Students are on phones, in a hurry, with one hand. The main action per screen is one big primary button. Targets are 44px. Words are plain ("Take it to the office", not "Submit high-value item").
 3. **Dense but unambiguous for staff.** Staff screens are compact (`.compact`), but the school being acted on is always visible, every state has an icon and words, and destructive actions take a second, deliberate step.
 4. **Private by default, and say so.** Any field only staff can see is marked "Only staff see this". Public screens never show the exact pin or the private note, only the zone name.
 5. **Accessible by construction.** WCAG 2.2 AA is built into the components (labels, descriptions, focus, live regions, target sizes, contrast, reflow) so pages get it without extra work.
-6. **Cheap to run.** Server components by default, pure CSS, inline SVG, system fonts. Client components only where there is real interaction.
+6. **Cheap to run.** Server components by default, pure CSS, inline SVG, one self-hosted font. Client components only where there is real interaction.
+7. **Fits the screen.** Each main screen fits a phone or laptop screen with as little scrolling as its content allows: students get a bottom tab bar on phones, staff sections sit in one swipeable row, and long forms and listings go two-column on wide screens.
 
 ## 2. Hard constraints
 
 - **Accessibility.** WCAG 2.2 AA. Everything works by keyboard with a visible focus ring. Targets are at least 24px (44px on student pages). Pages reflow at 320px and 200% zoom. `prefers-reduced-motion` is honored. Status is never color alone.
 - **Performance.** Student route JS must stay under 150 KB gzipped (15 section 18), so there are no UI libraries, no CSS frameworks, and no icon packages. The client components below add about 10 KB gzipped in total when all are used; the rest render on the server.
-- **CSP** is `'self'` plus a nonce, so web fonts from CDNs are blocked. Inline `style` attributes are allowed (`style-src-attr 'unsafe-inline'`), and so are `data:` and `blob:` images.
+- **CSP** is `'self'` plus a nonce, so web fonts from CDNs are blocked. Archivo is downloaded at build time by `next/font` and served from this origin. Inline `style` attributes are allowed (`style-src-attr 'unsafe-inline'`), and so are `data:` and `blob:` images.
 - **No new npm packages.**
 
 ## 3. Identity
 
 ### 3.1 Logo
 
-`LogoMark` is a lost-and-found tag, angled like it was just tied on, with a warm eyelet and a check (found, on its way back), on a rounded teal tile. `Logo` adds the "Recover" wordmark and an optional context label such as the school name.
+`LogoMark` is a lost-and-found tag, angled like it was just tied on, with an eyelet and a check (found, on its way back), on a rounded cardinal tile. `Logo` adds the "Recover" wordmark and an optional context label such as the school name.
 
 ```tsx
 import { Logo, LogoMark } from '@/components/ui/logo.tsx';
@@ -34,7 +35,7 @@ import { Logo, LogoMark } from '@/components/ui/logo.tsx';
 <Logo context="Fairview High" />
 ```
 
-The mark stays recognizable down to 24px; use 16px only where nothing else fits. Its colors come from `--logo-bg`, `--logo-fg`, and `--logo-accent`, which stay recognizably teal in dark mode.
+The mark stays recognizable down to 24px; use 16px only where nothing else fits. Its colors come from `--logo-bg`, `--logo-fg`, and `--logo-accent`, which stay cardinal in dark mode.
 
 ### 3.2 Color
 
@@ -42,38 +43,37 @@ Tokens, never hex values, in components and pages. Light is the default. Dark fo
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--bg` | `#f6f4ef` | `#151412` | Page background (warm paper) |
-| `--surface` | `#ffffff` | `#1e1d1a` | Cards, inputs, bars |
-| `--surface-2` / `--surface-3` | `#efece5` / `#e5e1d8` | `#272622` / `#312f2a` | Sunken areas, hovers, table headers, skeletons |
-| `--text` / `--muted` | `#1f1d1a` / `#5c5850` | `#efece5` / `#aaa598` | Body text / hints and metadata |
-| `--border` / `--border-strong` | `#dedad0` / `#8a8377` | `#3a3833` / `#7c776d` | Dividers / control boundaries (3:1) |
-| `--brand` | `#0f5c56` | `#5cc2b5` | Primary actions, links, selection |
-| `--brand-soft` / `--brand-strong` | `#e0efec` / `#0b4a45` | `#173532` / `#8adbd0` | Tinted backgrounds / text on them |
-| `--accent` (+ `-soft`, `-strong`, `-ink`) | `#c2501f` | `#f08a5d` | The one warm accent: map pin, new matches, counts, office-only tiles |
-| `--ok`, `--warn`, `--danger` (+ `-soft`) | green, amber, red | lighter tints | Status tones, always with an icon and words |
+| `--bg` | `#f4f4f5` | `#000000` | Page background (cool gray / black) |
+| `--surface` | `#ffffff` | `#141416` | Cards, inputs, bars |
+| `--surface-2` / `--surface-3` | `#ececee` / `#e2e2e5` | `#1d1d20` / `#27272b` | Sunken areas, hovers, table headers, skeletons |
+| `--text` / `--muted` | `#18181b` / `#52525b` | `#f4f4f5` / `#a1a1aa` | Body text / hints and metadata |
+| `--border` / `--border-strong` | `#e2e2e5` / `#8b8b94` | `#2a2a2e` / `#71717a` | Dividers / control boundaries (3:1) |
+| `--brand` | `#c8102e` | `#ff3347` | FCHS cardinal: primary actions, links, selection, the header stripe |
+| `--brand-soft` / `--brand-strong` | `#fce9ec` / `#9b0c24` | `#3a0d14` / `#ffb3bc` | Tinted backgrounds / text on them |
+| `--ink` (+ `-text`, `-muted`, `-line`) | `#000000` | `#000000` | The black header band, the student tab bar, item-card category labels, office-only tiles |
+| `--accent` (+ `-soft`, `-strong`, `-ink`) | same as brand | same as brand | Map pin, new matches, counts |
+| `--ok`, `--warn`, `--danger` (+ `-soft`) | green, amber, dark red | lighter tints | Status tones, always with an icon and words. Danger is darker than the brand red. |
+| `--info` (+ `-soft`) | `#27272a` | `#e4e4e7` | Neutral notices (the default notice tone) |
 | `--focus` | `#1f6feb` | `#79b8ff` | Focus ring only |
-
-`--info` is an alias of the brand teal, which keeps the palette to one cool hue.
 
 **Checked contrast pairs** (WCAG ratio, light / dark). Every text pair clears 4.5:1; control boundaries and the focus ring clear 3:1.
 
 | Pair | Light | Dark |
 |---|---|---|
-| text on bg | 15.3 | 15.6 |
-| muted on bg / surface / surface-2 | 6.4 / 7.1 / 6.0 | 7.5 / 6.9 / 6.2 |
-| brand on bg (links) | 7.1 | 8.6 |
-| brand-ink on brand (primary button) | 7.8 | 8.0 |
-| brand-strong on brand-soft (badges, chips) | 8.5 | 8.3 |
-| ok / warn / danger on their soft tints | 5.6 / 5.5 / 6.4 | 7.6 / 8.4 / 6.8 |
-| accent-strong on accent-soft | 6.6 | 8.1 |
-| accent-ink on accent (count bubble) | 4.7 | 7.2 |
-| danger-ink on danger (danger button) | 7.8 | 8.1 |
-| border-strong on surface (inputs) | 3.8 | 3.8 |
+| text on bg | 16.1 | 19.1 |
+| muted on bg / surface / surface-2 | 7.0 / 7.7 / 6.6 | 7.2 (on surface) |
+| brand on bg / surface (links) | 5.4 / 5.9 | 5.8 / 5.1 |
+| brand-ink on brand (primary button) | 5.9 | 5.8 |
+| brand-strong on brand-soft (badges, chips) | 7.3 | 10.0 |
+| white on ink (header band) / ink-muted on ink | 21 / 8.2 | 21 / 8.2 |
+| danger on danger-soft / white on danger | 7.7 / 8.9 | 8.0 |
+| info on info-soft | 13.2 | high |
+| border-strong on surface (inputs) | 3.4 | 3.8 |
 | focus on bg | 4.2 | 8.9 |
 
 ### 3.3 Type
 
-The system font stack only (`--font`, `--mono`), with a 16px body at a 1.5 line height.
+Archivo (`--font`, via `next/font`, with the system stack as fallback) and the system monospace (`--mono`) for item IDs, with a 16px body at a 1.5 line height. `h1` and `h2` use Archivo's width axis (`'wdth' 78`) at weight 800: condensed and heavy, like jersey lettering. Body text stays at normal width.
 
 | Token | Size | Use |
 |---|---|---|
@@ -82,7 +82,7 @@ The system font stack only (`--font`, `--mono`), with a 16px body at a 1.5 line 
 | `--text-md` | 16px | Body, inputs (16px also stops iOS zoom-on-focus) |
 | `--text-lg` | 18px | Empty-state and dialog titles |
 | `--text-xl` | 22px | Section headings |
-| `--text-2xl` | 24 to 30px, fluid | `h1` |
+| `--text-2xl` | 30 to 40px, fluid | `h1` (condensed) |
 | `--text-3xl` | 30 to 40px, fluid | Marketing-size titles (styleguide only today) |
 
 Use `.mono` for public IDs (`FCHS-M-000214`) and `.tabular` or `.num` for numbers that line up.
@@ -90,7 +90,7 @@ Use `.mono` for public IDs (`FCHS-M-000214`) and `.tabular` or `.num` for number
 ### 3.4 Space, radii, elevation, motion
 
 - **Spacing** is a 4px scale: `--space-1` (4px) up to `--space-16` (64px). Layout helpers are `.stack`, `.stack-sm`, `.stack-lg`, `.stack-xl`, `.row`, `.spread`, `.button-row`, `.grid`, `.grid-wide`, `.item-grid`, `.item-list`, and `.tile-grid`.
-- **Radii:** `--radius-xs` 4px (keycaps), `--radius-sm` 8px, `--radius-md` 10px (controls), `--radius` 12px (cards), `--radius-lg` 16px (dialogs), `--radius-xl` 24px, and `--radius-pill`.
+- **Radii:** `--radius-xs` 3px (keycaps), `--radius-sm` 6px, `--radius-md` 8px (controls), `--radius` 10px (cards), `--radius-lg` 14px (dialogs), `--radius-xl` 24px, and `--radius-pill`.
 - **Elevation:** `--shadow-sm`, `--shadow` (cards), and `--shadow-lg` (menus, dialogs, hovered cards). Dark mode leans on borders instead of shadows.
 - **Motion:** `--dur-fast` 120ms, `--dur` 180ms, `--dur-slow` 280ms, and `--ease`. Under `prefers-reduced-motion: reduce`, all durations are 0 and all animations stop (spinners, skeleton shimmer, pin drop, dialog fade).
 

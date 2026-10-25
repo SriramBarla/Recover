@@ -154,7 +154,7 @@ export default function StyleguidePage() {
         <Logo size={40} context="Design system" />
         <h1>Recover design system</h1>
         <p className="sg-lede">
-          Calm, trustworthy, and fast at dismissal. Warm paper neutrals, a deep teal brand, and one warm accent. Every specimen renders
+          Calm, trustworthy, and fast at dismissal. Forsyth Central colors: cardinal red, black, and white, on cool neutral grays. Every specimen renders
           in a forced light panel and a forced dark panel. Usage notes live in docs/DESIGN.md.
         </p>
         <nav aria-label="Styleguide sections">

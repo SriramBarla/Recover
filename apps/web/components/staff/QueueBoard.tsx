@@ -243,7 +243,7 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
         </Button>
       </div>
       <div className="spread">
-        <p className="hint" style={{ margin: 0 }}>
+        <p className="hint keyboard-hint" style={{ margin: 0 }}>
           Keyboard: <Kbd>J</Kbd> next, <Kbd>K</Kbd> previous, <Kbd>A</Kbd> approve, <Kbd>E</Kbd> approve with edits, <Kbd>R</Kbd> reject, <Kbd>X</Kbd> select,{' '}
           <Kbd>Esc</Kbd> close. Every shortcut has a button.
         </p>
@@ -370,33 +370,45 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
                 ) : null}
                 <div className="grid-wide">
                   <ItemPhotos code={code} item={item} blurred={item.quarantine} />
-                  <dl className="kv kv-stacked small">
-                    <dt>Description (public after approval)</dt>
-                    <dd>{item.description ?? <span className="muted">None</span>}</dd>
-                    <dt>
-                      Finder's location note <PrivateNote>Staff only</PrivateNote>
-                    </dt>
-                    <dd>{item.note ?? <span className="muted">None</span>}</dd>
-                    <dt>
-                      Exact pin <PrivateNote>Staff only</PrivateNote>
-                    </dt>
-                    <dd>
-                      <ItemPin code={code} pin={item.pin} mapVersionId={item.mapVersionId} activeMap={meta?.map ?? null} canReadMaps={canReadMaps} label={title} />
-                    </dd>
-                    <dt>Public zone</dt>
-                    <dd>{item.zoneName ?? <span className="muted">None</span>}</dd>
-                    <dt>Drop-off</dt>
-                    <dd>{locationName(item.dropoffLocationId)}</dd>
-                    <dt>Device rejections, last 30 days</dt>
-                    <dd>
-                      {rejections === null ? (
-                        <span className="muted">Not applicable</span>
-                      ) : (
-                        <Badge tone={rejections >= 3 ? 'danger' : rejections > 0 ? 'warn' : 'neutral'} icon={rejections > 0 ? <IconAlert /> : undefined}>
-                          {rejections}
-                        </Badge>
-                      )}
-                    </dd>
+                  <dl className="kv-pairs small">
+                    <div className="kv-pair-wide">
+                      <dt>Description (public after approval)</dt>
+                      <dd>{item.description ?? <span className="muted">None</span>}</dd>
+                    </div>
+                    <div>
+                      <dt>
+                        Finder's location note <PrivateNote>Staff only</PrivateNote>
+                      </dt>
+                      <dd>{item.note ?? <span className="muted">None</span>}</dd>
+                    </div>
+                    <div className="kv-pair-wide">
+                      <dt>
+                        Exact pin <PrivateNote>Staff only</PrivateNote>
+                      </dt>
+                      <dd>
+                        <ItemPin code={code} pin={item.pin} mapVersionId={item.mapVersionId} activeMap={meta?.map ?? null} canReadMaps={canReadMaps} label={title} />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Public zone</dt>
+                      <dd>{item.zoneName ?? <span className="muted">None</span>}</dd>
+                    </div>
+                    <div>
+                      <dt>Drop-off</dt>
+                      <dd>{locationName(item.dropoffLocationId)}</dd>
+                    </div>
+                    <div>
+                      <dt>Device rejections, last 30 days</dt>
+                      <dd>
+                        {rejections === null ? (
+                          <span className="muted">Not applicable</span>
+                        ) : (
+                          <Badge tone={rejections >= 3 ? 'danger' : rejections > 0 ? 'warn' : 'neutral'} icon={rejections > 0 ? <IconAlert /> : undefined}>
+                            {rejections}
+                          </Badge>
+                        )}
+                      </dd>
+                    </div>
                   </dl>
                 </div>
                 <div className="button-row review-actions">
