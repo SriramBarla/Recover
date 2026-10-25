@@ -1,15 +1,18 @@
 // /api/district/schools: GET all schools; POST create {code, name, timezone, adminEmail, adminName}
 // and assign the first school admin (§5.6, §24 step 1). SQL validates the timezone (F-101).
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { PublicError } from '@recover/shared/errors.ts';
 import { SCHOOL_CODE_RE, emailOf, textOf } from '@/lib/ops.ts';
 import { apiDistrict, districtCall, handler, mutation, ok } from '@/lib/staff.ts';
 
 export const GET = handler<Record<string, never>>('district.schools', async (_req, _p, rid) => {
+  if (!DISTRICT_ENABLED) throw new PublicError('not_found'); // pilot (lib/features.ts)
   const s = await apiDistrict();
   return ok(await districtCall(s, 'api_district_schools_list'), rid);
 });
 
 export const POST = handler<Record<string, never>>('district.schools.create', async (req, _p, rid) => {
+  if (!DISTRICT_ENABLED) throw new PublicError('not_found'); // pilot (lib/features.ts)
   const body = await mutation(req);
   const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
   if (!SCHOOL_CODE_RE.test(code)) throw new PublicError('invalid_input', 'code');

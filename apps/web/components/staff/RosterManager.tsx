@@ -1,5 +1,6 @@
 'use client';
 
+import { districtOr } from '@/lib/features.ts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import type { StaffRole } from '@recover/shared/dto.ts';
@@ -63,7 +64,7 @@ export function RosterManager({ code, members, canRebind, tz }: Props) {
         <p className="hint">Reviewers review posts. Office staff also handle custody and devices. School admins also manage the roster, locations, map, and settings.</p>
         <form onSubmit={invite} className="stack">
           <div className="grid-wide">
-            <TextInput id="invite-email" label="District email" type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <TextInput id="invite-email" label={districtOr('District email', 'School email')} type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
             <TextInput id="invite-name" label="Name" optional maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
             <Select
               id="invite-role"

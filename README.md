@@ -6,6 +6,8 @@ District-wide school lost-and-found.
 - **Staff** sign in with their district Google account. They review every post before it becomes visible, and they manage custody from drop-off to claim.
 - **District admins** onboard schools and approve campus maps.
 
+> **Pilot mode:** Recover is approved at one school, not yet by the district. `DISTRICT_ENABLED` in `apps/web/lib/features.ts` is `false`, which hides the district pages, their APIs, cross-school search, and district wording. Campus map approval stays at `/district/maps` for the Recover admin (the `district_admin` account). Set it to `true` to bring the district back.
+
 > **Status:** under active construction. The foundation, database, worker, student app, and staff app are being built on feature branches and merged through pull requests. See [Build status](#build-status).
 
 ## How it works

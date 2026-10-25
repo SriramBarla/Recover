@@ -1,5 +1,7 @@
 // /district/settings: retention floor and ceiling, staff email domains, global switches, the
 // screening ceiling, and the worker mode (§5.6; F-64, F-67, G-06).
+import { notFound } from 'next/navigation';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/ui/page-header.tsx';
 import { DistrictSettingsForm } from '@/components/staff/DistrictSettingsForm.tsx';
@@ -10,6 +12,8 @@ import { districtCall, load, requireDistrict, signinPath } from '@/lib/staff.ts'
 export const metadata: Metadata = { title: 'District settings - Recover' };
 
 export default async function DistrictSettingsPage() {
+  // Pilot: hidden until the district approves Recover (lib/features.ts).
+  if (!DISTRICT_ENABLED) notFound();
   const r = await requireDistrict('/district/settings');
   const settings = await load('page.district.settings', async () => districtSettingsOf(await districtCall<unknown>(r, 'api_district_settings_get')));
   return (

@@ -1,11 +1,12 @@
 // School-scoped staff shell: header with the school's section nav (aria-current) gated by role.
 // Pages enforce access with requireStaff; this layout only renders chrome for a resolved context.
 import { buttonClass } from '@/components/ui/button.tsx';
-import { IconShield } from '@/components/ui/icons.tsx';
+import { IconMap, IconShield } from '@/components/ui/icons.tsx';
 import { ROLE_LABELS } from '@/components/staff/format.ts';
 import { sectionIcon } from '@/components/staff/nav-icons.tsx';
 import { SessionKeepAlive } from '@/components/staff/SessionKeepAlive.tsx';
 import { TopBar } from '@/components/staff/TopBar.tsx';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { pagesFor } from '@/lib/ops.ts';
 import { getStaffContext, schoolMemberships } from '@/lib/staff.ts';
 
@@ -36,10 +37,17 @@ export default async function SchoolLayout({ children, params }: LayoutProps<'/s
         userLabel={who}
         links={
           ctx?.isDistrict ? (
-            <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/district">
-              <IconShield />
-              District
-            </a>
+            DISTRICT_ENABLED ? (
+              <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/district">
+                <IconShield />
+                District
+              </a>
+            ) : (
+              <a className={buttonClass({ variant: 'ghost', size: 'sm' })} href="/district/maps">
+                <IconMap />
+                Map approvals
+              </a>
+            )
           ) : null
         }
       />

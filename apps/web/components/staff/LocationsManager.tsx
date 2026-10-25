@@ -1,5 +1,6 @@
 'use client';
 
+import { districtOr } from '@/lib/features.ts';
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -157,7 +158,7 @@ export function LocationsManager({ code, locations, versions }: Props) {
                 }}
                 options={pinnable.map((v) => ({
                   value: v.id,
-                  label: `${v.active ? 'Active map' : v.approvalStatus === 'draft' ? 'Draft' : 'Waiting for district'} (${v.id.slice(0, 8)})`,
+                  label: `${v.active ? 'Active map' : v.approvalStatus === 'draft' ? 'Draft' : districtOr('Waiting for district', 'Waiting for approval')} (${v.id.slice(0, 8)})`,
                 }))}
               />
               <Select

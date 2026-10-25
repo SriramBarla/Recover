@@ -1,5 +1,6 @@
 // /staff/[code]/items/[id]: one item with every state, the custody timeline, and the actions the
 // role and state allow (§5.3-5.4, Appendix C).
+import { districtOr } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -129,7 +130,7 @@ export default async function ItemPage({ params }: PageProps<'/staff/[code]/item
       </PageHeader>
       {item.quarantine ? (
         <Notice tone="danger" live="assertive" title="Quarantined by automated screening.">
-          {atLeast(role, 'school_admin') ? 'Do not download or share it. Follow the district incident contact tree before acting.' : 'Ask a school admin.'}
+          {atLeast(role, 'school_admin') ? districtOr('Do not download or share it. Follow the district incident contact tree before acting.', 'Do not download or share it. Tell your principal before acting.') : 'Ask a school admin.'}
         </Notice>
       ) : null}
       <div className="grid-wide">

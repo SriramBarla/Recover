@@ -2,6 +2,7 @@
 // and words, never color alone. `context` adds a spoken prefix ("Review: Approved") for places
 // without a column header. FlagChip names the queue's screening flags in plain words; flagKeys
 // derives the flags a card shows from a StaffItemRow's flags and screeningStatus.
+import { districtOr } from '@/lib/features.ts';
 import type { ReactNode } from 'react';
 import { badgeClass, type Tone } from './badge.tsx';
 import {
@@ -58,7 +59,7 @@ const DEFS: Record<StatusKind, Record<string, Def>> = {
   },
   map: {
     draft: { label: 'Draft', tone: 'neutral', Icon: IconPencil },
-    pending_district: { label: 'Awaiting district', tone: 'warn', Icon: IconClock },
+    pending_district: { label: districtOr('Awaiting district', 'Awaiting approval'), tone: 'warn', Icon: IconClock },
     approved: { label: 'Approved', tone: 'ok', Icon: IconCheck },
     rejected: { label: 'Rejected', tone: 'danger', Icon: IconX },
     retired: { label: 'Retired', tone: 'neutral', Icon: IconEyeOff },

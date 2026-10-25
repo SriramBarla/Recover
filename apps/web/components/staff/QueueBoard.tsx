@@ -1,5 +1,6 @@
 'use client';
 
+import { districtOr } from '@/lib/features.ts';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RejectReason, StaffItemRow } from '@recover/shared/dto.ts';
@@ -339,7 +340,7 @@ export function QueueBoard({ code, initial, meta, canSeeQuarantine, canReadMaps,
               >
                 {item.quarantine ? (
                   <Notice tone="danger" live="assertive" title="Quarantined by automated screening.">
-                    {canSeeQuarantine ? 'Do not download or share it. Follow the district incident contact tree before acting.' : 'Ask a school admin.'}
+                    {canSeeQuarantine ? districtOr('Do not download or share it. Follow the district incident contact tree before acting.', 'Do not download or share it. Tell your principal before acting.') : 'Ask a school admin.'}
                   </Notice>
                 ) : null}
                 <div className="spread">

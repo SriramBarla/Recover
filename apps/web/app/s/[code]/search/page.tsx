@@ -1,5 +1,6 @@
 // /s/[code]/search?q=: results grid for this school (§11), and, when the school has opted in, the optional
 // cross-school search (F-79). Same `search` rate limit as the JSON route; query text is never logged.
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import { headers } from 'next/headers';
 import { PublicError } from '@recover/shared/errors.ts';
 import type { PublicItemRow } from '@recover/shared/dto.ts';
@@ -31,7 +32,8 @@ export default async function SearchPage({ params, searchParams }: Props) {
   const tz = meta.school.timezone;
   const names = locationNames(meta);
   const raw = (firstParam(sp.q) ?? '').slice(0, 200);
-  const crossAllowed = meta.school.flags.crossSchoolSearch;
+  // Pilot (lib/features.ts): one school, so no cross-school search.
+  const crossAllowed = DISTRICT_ENABLED && meta.school.flags.crossSchoolSearch;
   const all = crossAllowed && firstParam(sp.all) === '1';
 
   let results: CrossSchoolItem[] | null = null;

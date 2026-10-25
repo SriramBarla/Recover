@@ -1,5 +1,7 @@
 // /district/schools: school list, create, and the onboarding checklist per school (§24 and its
 // implementation guide). The checklist status comes from api_district_onboarding.
+import { notFound } from 'next/navigation';
+import { DISTRICT_ENABLED } from '@/lib/features.ts';
 import type { Metadata } from 'next';
 import { Badge } from '@/components/ui/badge.tsx';
 import { buttonClass } from '@/components/ui/button.tsx';
@@ -69,6 +71,8 @@ function Checklist({ code, steps }: { code: string; steps: OnboardingStep[] | nu
 }
 
 export default async function DistrictSchools({ searchParams }: PageProps<'/district/schools'>) {
+  // Pilot: hidden until the district approves Recover (lib/features.ts).
+  if (!DISTRICT_ENABLED) notFound();
   const r = await requireDistrict('/district/schools');
   const sp = await searchParams;
   const selected = typeof sp.school === 'string' && SCHOOL_CODE_RE.test(sp.school) ? sp.school : null;
