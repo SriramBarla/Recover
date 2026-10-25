@@ -130,22 +130,17 @@ export function ItemCard({
               <span>{categoryLabel(category)}</span>
             </li>
           ) : null}
-          {zoneName ? (
+          {/* Where and when share one line ("Found Oct 25 near Library") to keep cards short. */}
+          {zoneName || foundLabel ? (
             <li>
-              <IconMapPin size={16} />
-              <span>Found near {zoneName}</span>
+              {zoneName ? <IconMapPin size={16} /> : <IconClock size={16} />}
+              <span>{zoneName ? `${foundLabel ?? 'Found'} near ${zoneName}` : foundLabel}</span>
             </li>
           ) : null}
           <li className="item-card-custody" data-custody={custody}>
             <CustodyIcon custody={custody} />
             <span>{custodyLabel ?? custodyLine(custody, locationName)}</span>
           </li>
-          {foundLabel ? (
-            <li>
-              <IconClock size={16} />
-              <span>{foundLabel}</span>
-            </li>
-          ) : null}
         </ul>
         {status ? <div className="item-card-status">{status}</div> : null}
         {publicId ? (

@@ -185,7 +185,7 @@ export function PostForm({ code, mode, meta }: Props) {
   const highValue = category !== '' && HIGH_VALUE_CATEGORIES.includes(category);
 
   return (
-    <div className="stack-lg" style={{ maxWidth: '48rem' }}>
+    <div className="stack-lg" style={{ maxWidth: backfill ? '48rem' : '72rem' }}>
       {backfill ? (
         <StatGrid label="Backfill session">
           <Stat value={log.length} label="Items this session" />
@@ -217,7 +217,8 @@ export function PostForm({ code, mode, meta }: Props) {
       ) : null}
 
       <form onSubmit={submit} className="card card-pad-lg stack-lg" aria-label={backfill ? 'Backfill item' : 'Post a found item'}>
-        <fieldset className="stack" disabled={busy || pending !== null} style={{ border: 0, padding: 0, margin: 0 }}>
+        <fieldset className={backfill ? 'post-grid post-grid-single' : 'post-grid'} disabled={busy || pending !== null} style={{ border: 0, padding: 0, margin: 0 }}>
+          <div className="stack post-main">
           <Select
             id="post-category"
             label="Category"
@@ -319,12 +320,13 @@ export function PostForm({ code, mode, meta }: Props) {
             </div>
             <span className="hint">Photos are resized and converted to JPEG on this device, then checked again on the server.</span>
           </div>
+          </div>
 
           {!backfill ? (
-            <div className="stack">
+            <div className="stack post-side">
               <span className="label">Where it was found (optional, staff only)</span>
               {meta?.map?.url ? (
-                <div style={{ maxWidth: '36rem' }}>
+                <div>
                   <MapPicker
                     src={meta.map.url}
                     width={meta.map.width}

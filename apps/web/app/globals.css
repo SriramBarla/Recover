@@ -1,5 +1,5 @@
 /* Recover design system: tokens, base styles, and component classes (docs/DESIGN.md).
-   No framework, no web fonts, no images: system fonts and inline SVG only (CSP is 'self').
+   No framework and no images: one self-hosted font (Archivo, via next/font) and inline SVG (CSP is 'self').
    WCAG 2.2 AA: 4.5:1 text, 3:1 control boundaries and focus, 44px targets on student pages
    (24px floor everywhere), reflow at 320px, reduced motion honored.
    Class names are a public API used across pages: extend and refine, never rename or remove. */
@@ -21,26 +21,29 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
-  /* Type: system stack only. */
-  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Type: Archivo, self-hosted through next/font (--font-archivo, set on <html>), with the system
+     stack as the fallback. Display text uses Archivo's width axis: condensed and heavy, like a
+     jersey number, while body text stays at normal width. */
+  --font: var(--font-archivo, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display-stretch: 78%;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-md: 1rem;
   --text-lg: 1.125rem;
   --text-xl: 1.375rem;
-  --text-2xl: clamp(1.5rem, 1.3rem + 0.9vw, 1.875rem);
+  --text-2xl: clamp(1.875rem, 1.55rem + 1.3vw, 2.5rem);
   --text-3xl: clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem);
   --leading-tight: 1.2;
   --leading-snug: 1.35;
   --leading: 1.5;
 
   /* Radii. */
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius: 12px;
-  --radius-lg: 16px;
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
   --radius-xl: 24px;
   --radius-pill: 999px;
 
@@ -69,133 +72,146 @@
 /* ========================================================================
    2. Color tokens. Light is the default; dark follows the OS, and
    [data-theme] forces either theme on any subtree (used by /styleguide).
-   Every text pair below is checked at 4.5:1 or better (docs/DESIGN.md).
+   FCHS colors: cardinal red, black, and white. Every text pair below is
+   checked at 4.5:1 or better (docs/DESIGN.md).
    ======================================================================== */
 :root,
 [data-theme='light'] {
   color-scheme: light;
-  --bg: #f6f4ef;
+  --bg: #f4f4f5;
   --surface: #ffffff;
-  --surface-2: #efece5;
-  --surface-3: #e5e1d8;
-  --track: #d8d3c7;
-  --text: #1f1d1a;
-  --muted: #5c5850;
-  --border: #dedad0;
-  --border-strong: #8a8377;
-  --brand: #0f5c56;
-  --brand-hover: #0b4a45;
+  --surface-2: #ececee;
+  --surface-3: #e2e2e5;
+  --track: #d4d4d8;
+  --text: #18181b;
+  --muted: #52525b;
+  --border: #e2e2e5;
+  --border-strong: #8b8b94;
+  --brand: #c8102e;
+  --brand-hover: #a50d26;
   --brand-ink: #ffffff;
-  --brand-soft: #e0efec;
-  --brand-strong: #0b4a45;
-  --accent: #c2501f;
+  --brand-soft: #fce9ec;
+  --brand-strong: #9b0c24;
+  --accent: #c8102e;
   --accent-ink: #ffffff;
-  --accent-soft: #fbe8dc;
-  --accent-strong: #8f3413;
-  --ok: #1d6b35;
-  --ok-soft: #e1f2e6;
-  --warn: #855600;
-  --warn-soft: #fdefc8;
-  --danger: #a4161a;
-  --danger-hover: #861216;
+  --accent-soft: #fce9ec;
+  --accent-strong: #9b0c24;
+  --ink: #000000;
+  --ink-text: #ffffff;
+  --ink-muted: #a1a1aa;
+  --ink-line: #27272a;
+  --ok: #166534;
+  --ok-soft: #e3f4e8;
+  --warn: #854d0e;
+  --warn-soft: #fdf1c7;
+  --danger: #8f1d1d;
+  --danger-hover: #741616;
   --danger-ink: #ffffff;
-  --danger-soft: #fbe4e4;
-  --info: #0f5c56;
-  --info-soft: #e0efec;
+  --danger-soft: #fdeaea;
+  --info: #27272a;
+  --info-soft: #f1f1f3;
   --focus: #1f6feb;
-  --overlay: rgb(31 29 26 / 0.5);
-  --shadow-sm: 0 1px 2px rgb(31 29 26 / 0.06);
-  --shadow: 0 1px 2px rgb(31 29 26 / 0.06), 0 4px 12px rgb(31 29 26 / 0.05);
-  --shadow-lg: 0 2px 6px rgb(31 29 26 / 0.08), 0 16px 40px rgb(31 29 26 / 0.16);
-  --scroll-shadow: rgb(31 29 26 / 0.22);
-  --logo-bg: #0f5c56;
+  --overlay: rgb(0 0 0 / 0.55);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 4px 10px rgb(0 0 0 / 0.08), 0 18px 44px rgb(0 0 0 / 0.16);
+  --scroll-shadow: rgb(0 0 0 / 0.2);
+  --logo-bg: #c8102e;
   --logo-fg: #ffffff;
-  --logo-accent: #f4a259;
+  --logo-accent: #000000;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #151412;
-    --surface: #1e1d1a;
-    --surface-2: #272622;
-    --surface-3: #312f2a;
-    --track: #45423c;
-    --text: #efece5;
-    --muted: #aaa598;
-    --border: #3a3833;
-    --border-strong: #7c776d;
-    --brand: #5cc2b5;
-    --brand-hover: #7fd3c8;
-    --brand-ink: #0b1f1c;
-    --brand-soft: #173532;
-    --brand-strong: #8adbd0;
-    --accent: #f08a5d;
-    --accent-ink: #2a1206;
-    --accent-soft: #3d241a;
-    --accent-strong: #ffb08c;
+    --bg: #000000;
+    --surface: #141416;
+    --surface-2: #1d1d20;
+    --surface-3: #27272b;
+    --track: #3f3f46;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #2a2a2e;
+    --border-strong: #71717a;
+    --brand: #ff3347;
+    --brand-hover: #ff5a6a;
+    --brand-ink: #000000;
+    --brand-soft: #3a0d14;
+    --brand-strong: #ffb3bc;
+    --accent: #ff3347;
+    --accent-ink: #000000;
+    --accent-soft: #3a0d14;
+    --accent-strong: #ffb3bc;
+    --ink: #000000;
+    --ink-text: #ffffff;
+    --ink-muted: #a1a1aa;
+    --ink-line: #27272a;
     --ok: #7bd494;
-    --ok-soft: #173322;
+    --ok-soft: #12301c;
     --warn: #f3c969;
-    --warn-soft: #3a2f12;
-    --danger: #ff8a8a;
-    --danger-hover: #ffa8a8;
+    --warn-soft: #362b0e;
+    --danger: #ff9c9c;
+    --danger-hover: #ffb8b8;
     --danger-ink: #2a0a0a;
-    --danger-soft: #3d1b1b;
-    --info: #5cc2b5;
-    --info-soft: #173532;
+    --danger-soft: #3b1616;
+    --info: #e4e4e7;
+    --info-soft: #1d1d20;
     --focus: #79b8ff;
-    --overlay: rgb(0 0 0 / 0.62);
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.28);
-    --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.55);
-    --scroll-shadow: rgb(0 0 0 / 0.65);
-    --logo-bg: #14756d;
+    --overlay: rgb(0 0 0 / 0.7);
+    --shadow-sm: none;
+    --shadow: none;
+    --shadow-lg: 0 4px 10px rgb(0 0 0 / 0.5), 0 18px 44px rgb(0 0 0 / 0.6);
+    --scroll-shadow: rgb(0 0 0 / 0.7);
+    --logo-bg: #c8102e;
     --logo-fg: #ffffff;
-    --logo-accent: #f7b27a;
+    --logo-accent: #000000;
   }
 }
 
 /* Same values as the dark block above: keep the two in sync. */
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg: #151412;
-  --surface: #1e1d1a;
-  --surface-2: #272622;
-  --surface-3: #312f2a;
-  --track: #45423c;
-  --text: #efece5;
-  --muted: #aaa598;
-  --border: #3a3833;
-  --border-strong: #7c776d;
-  --brand: #5cc2b5;
-  --brand-hover: #7fd3c8;
-  --brand-ink: #0b1f1c;
-  --brand-soft: #173532;
-  --brand-strong: #8adbd0;
-  --accent: #f08a5d;
-  --accent-ink: #2a1206;
-  --accent-soft: #3d241a;
-  --accent-strong: #ffb08c;
+  --bg: #000000;
+  --surface: #141416;
+  --surface-2: #1d1d20;
+  --surface-3: #27272b;
+  --track: #3f3f46;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --border: #2a2a2e;
+  --border-strong: #71717a;
+  --brand: #ff3347;
+  --brand-hover: #ff5a6a;
+  --brand-ink: #000000;
+  --brand-soft: #3a0d14;
+  --brand-strong: #ffb3bc;
+  --accent: #ff3347;
+  --accent-ink: #000000;
+  --accent-soft: #3a0d14;
+  --accent-strong: #ffb3bc;
+  --ink: #000000;
+  --ink-text: #ffffff;
+  --ink-muted: #a1a1aa;
+  --ink-line: #27272a;
   --ok: #7bd494;
-  --ok-soft: #173322;
+  --ok-soft: #12301c;
   --warn: #f3c969;
-  --warn-soft: #3a2f12;
-  --danger: #ff8a8a;
-  --danger-hover: #ffa8a8;
+  --warn-soft: #362b0e;
+  --danger: #ff9c9c;
+  --danger-hover: #ffb8b8;
   --danger-ink: #2a0a0a;
-  --danger-soft: #3d1b1b;
-  --info: #5cc2b5;
-  --info-soft: #173532;
+  --danger-soft: #3b1616;
+  --info: #e4e4e7;
+  --info-soft: #1d1d20;
   --focus: #79b8ff;
-  --overlay: rgb(0 0 0 / 0.62);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.28);
-  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.55);
-  --scroll-shadow: rgb(0 0 0 / 0.65);
-  --logo-bg: #14756d;
+  --overlay: rgb(0 0 0 / 0.7);
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-lg: 0 4px 10px rgb(0 0 0 / 0.5), 0 18px 44px rgb(0 0 0 / 0.6);
+  --scroll-shadow: rgb(0 0 0 / 0.7);
+  --logo-bg: #c8102e;
   --logo-fg: #ffffff;
-  --logo-accent: #f7b27a;
+  --logo-accent: #000000;
 }
 
 [data-theme] {
@@ -229,6 +245,7 @@ body {
   color: var(--text);
   font: var(--text-md) / var(--leading) var(--font);
   overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
 }
 img {
   max-width: 100%;
@@ -252,13 +269,21 @@ h3,
 h4 {
   line-height: var(--leading-tight);
   margin: 0 0 0.5rem;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
+}
+/* Display headings: Archivo condensed and heavy, the one loud thing on each page. */
+h1,
+h2 {
+  font-variation-settings: 'wdth' 78;
+  font-stretch: var(--font-display-stretch);
+  font-weight: 800;
 }
 h1 {
   font-size: var(--text-2xl);
+  line-height: 1.05;
 }
 h2 {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
 }
 h3 {
   font-size: 1.0625rem;
@@ -485,53 +510,78 @@ dd,
 
 /* ========================================================================
    7. Top bar, brand, navigation, school context
+   A black band with a cardinal stripe under it. Students get a bottom tab
+   bar on phones; staff get one swipeable row of sections.
    ======================================================================== */
 .topbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--ink);
+  color: var(--ink-text);
+  border-bottom: 4px solid var(--brand);
+  position: relative;
+  z-index: var(--z-sticky);
 }
 .topbar .container {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  gap: 0 1rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
 }
 .topbar-start {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 0.5rem 1rem;
   min-width: 0;
+  flex: 1 1 0%;
 }
 .topbar-end {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
   margin-left: auto;
 }
 .topbar-nav {
   min-width: 0;
 }
 .topbar-user {
-  max-width: 18rem;
+  max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: var(--text-sm);
+  padding-right: 0.25rem;
 }
-@media (max-width: 40rem) {
+@media (max-width: 47.99rem) {
   .topbar-user {
     display: none;
   }
 }
-@media (max-width: 47.99rem) {
-  .topbar-nav {
-    order: 3;
-    width: 100%;
+/* Buttons and links that sit on the black band. */
+.topbar .btn:is(.btn-ghost, .btn-secondary) {
+  color: var(--ink-text);
+  background: transparent;
+  border-color: transparent;
+}
+.topbar .btn:is(.btn-ghost, .btn-secondary):hover {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--ink-text);
+}
+.topbar .btn:is(.btn-ghost, .btn-secondary) svg {
+  color: currentColor;
+}
+@media (max-width: 30rem) {
+  /* Sign out and similar: icon only on small phones; the name stays spoken. */
+  .topbar-end .btn > span:not(.visually-hidden) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 .brand {
@@ -539,138 +589,230 @@ dd,
   align-items: center;
   gap: 0.55rem;
   min-height: var(--target);
-  font-weight: 700;
-  font-size: 1.125rem;
+  min-width: 0;
+  font-weight: 800;
+  font-size: 1.1875rem;
+  font-variation-settings: 'wdth' 78;
+  font-stretch: var(--font-display-stretch);
   color: var(--text);
   text-decoration: none;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
+}
+.topbar .brand {
+  color: var(--ink-text);
+}
+.topbar .brand-context {
+  color: var(--ink-muted);
+  border-left-color: var(--ink-line);
 }
 .brand:hover .brand-name {
   text-decoration: underline;
-  text-decoration-thickness: 2px;
+  text-decoration-color: var(--brand);
+  text-decoration-thickness: 3px;
 }
 .brand-context {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--muted);
-  padding-left: 0.75rem;
+  padding-left: 0.65rem;
   border-left: 1px solid var(--border);
-  line-height: 1.25;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .nav {
   display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
+  gap: 0.125rem;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 .nav a {
+  position: relative;
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   text-decoration: none;
-  color: var(--text);
+  color: var(--ink-muted);
   min-height: var(--target);
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  font-weight: 500;
-  transition: background-color var(--dur-fast) var(--ease);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 .nav a:hover {
-  background: var(--surface-2);
+  color: var(--ink-text);
+  background: rgb(255 255 255 / 0.08);
 }
 .nav a svg {
   width: 18px;
   height: 18px;
-  color: var(--muted);
-}
-.nav a[aria-current='page'] {
-  background: var(--brand-soft);
-  color: var(--brand-strong);
-  font-weight: 700;
-}
-.nav a[aria-current='page'] svg {
   color: currentColor;
 }
-/* Phones: drop nav icons and tighten padding so a three-link nav fits on one row. */
-@media (max-width: 30rem) {
-  .nav a {
-    padding: 0.5rem 0.6rem;
+.nav a[aria-current='page'] {
+  color: var(--ink-text);
+  font-weight: 700;
+}
+/* The current section sits on the cardinal stripe. */
+.nav a[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: -0.375rem;
+  height: 4px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ink-text);
+}
+
+/* Staff and district: brand, school, and account on the first row; sections on a second row that
+   scrolls sideways instead of wrapping, so the header stays two rows tall on any screen. */
+.topbar.compact .topbar-nav {
+  order: 3;
+  margin: 0 -1rem;
+  width: calc(100% + 2rem);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, transparent 0, #000 1rem, #000 calc(100% - 1.5rem), transparent 100%);
+}
+.topbar.compact .topbar-nav::-webkit-scrollbar {
+  display: none;
+}
+.topbar.compact .nav {
+  padding: 0 1rem;
+  width: max-content;
+}
+.topbar.compact .nav a {
+  padding: 0.4rem 0.7rem;
+}
+/* The section row scrolls, which clips anything below it: keep the marker inside the link. */
+.topbar.compact .nav a[aria-current='page']::after {
+  bottom: 0;
+}
+
+/* Students: links sit in the band on wide screens and become a bottom tab bar on phones, where the
+   thumb is. The tab bar is the same black band, with the stripe on top. */
+@media (min-width: 48rem) {
+  .topbar-student .topbar-nav {
+    margin-left: auto;
   }
-  .nav a svg {
-    display: none;
+}
+@media (max-width: 47.99rem) {
+  .topbar-student .topbar-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-sticky);
+    background: var(--ink);
+    border-top: 4px solid var(--brand);
+    padding: 0 0.25rem env(safe-area-inset-bottom);
+  }
+  .topbar-student .nav {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 0;
+  }
+  .topbar-student .nav a {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.15rem;
+    min-height: 3.5rem;
+    padding: 0.4rem 0.25rem;
+    border-radius: 0;
+    font-size: 0.8125rem;
+    width: 100%;
+  }
+  .topbar-student .nav a svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+  .topbar-student .nav a[aria-current='page']::after {
+    top: -4px;
+    bottom: auto;
+    left: 25%;
+    right: 25%;
+    background: var(--ink-text);
+    border-radius: 0 0 2px 2px;
+  }
+  /* Room for the tab bar under the last thing on the page. */
+  .footer.student-shell,
+  .student-shell {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
 }
 
-/* School context: which school a staff member is acting on, always visible. */
+/* School context: which school a staff member is acting on, always visible, on the black band. */
 .school-switcher {
   position: relative;
   display: inline-block;
   max-width: 100%;
+  min-width: 0;
 }
 .school-switcher-current {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   min-height: var(--target);
-  padding: 0.3rem 0.75rem 0.3rem 0.35rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  color: var(--text);
+  padding: 0.2rem 0.6rem 0.2rem 0.65rem;
+  border-left: 1px solid var(--ink-line);
+  border-radius: 0;
+  color: var(--ink-text);
   max-width: 100%;
 }
 summary.school-switcher-current {
   cursor: pointer;
   list-style: none;
+  border-radius: var(--radius-sm);
 }
 summary.school-switcher-current::-webkit-details-marker {
   display: none;
 }
 summary.school-switcher-current:hover {
-  border-color: var(--brand);
+  background: rgb(255 255 255 / 0.08);
 }
 .school-switcher-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--brand);
-  color: var(--brand-ink);
-  flex: none;
+  display: none;
 }
 .school-switcher-text {
   display: grid;
   min-width: 0;
   line-height: 1.2;
 }
+/* "Acting for" is spoken, not shown: the band already says whose school this is. */
 .school-switcher-label {
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .school-switcher-name {
-  font-weight: 700;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .school-switcher-code {
-  font-family: var(--mono);
   font-size: var(--text-xs);
-  font-weight: 700;
-  padding: 0.1rem 0.4rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.125rem 0.4rem;
   border-radius: var(--radius-xs);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: var(--brand);
+  color: #ffffff;
 }
+/* Outside the band (school picker cards) the code chip keeps the same cardinal look. */
 .school-switcher-chevron {
-  color: var(--muted);
+  color: var(--ink-muted);
   transition: transform var(--dur) var(--ease);
 }
 details[open] > summary .school-switcher-chevron {
@@ -678,7 +820,7 @@ details[open] > summary .school-switcher-chevron {
 }
 .school-switcher-menu {
   position: absolute;
-  top: calc(100% + 0.375rem);
+  top: calc(100% + 0.5rem);
   left: 0;
   z-index: var(--z-dropdown);
   min-width: 16rem;
@@ -687,6 +829,7 @@ details[open] > summary .school-switcher-chevron {
   padding: 0.375rem;
   list-style: none;
   background: var(--surface);
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -708,6 +851,22 @@ details[open] > summary .school-switcher-chevron {
 .school-switcher-menu a[aria-current='true'] {
   background: var(--brand-soft);
   font-weight: 700;
+}
+/* Small phones: the wordmark is spoken but not shown, so the school name gets the room. */
+@media (max-width: 30rem) {
+  .topbar .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .topbar .brand-context {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 /* Search bar: one wide field with a leading icon, then the button. */
@@ -775,8 +934,8 @@ details[open] > summary .school-switcher-chevron {
    ======================================================================== */
 .page-header {
   display: grid;
-  gap: 0.5rem;
-  margin: 0 0 var(--space-6);
+  gap: 0.375rem;
+  margin: 0 0 var(--space-5);
 }
 .page-header-back {
   display: inline-flex;
@@ -809,19 +968,18 @@ details[open] > summary .school-switcher-chevron {
 }
 .page-header-eyebrow {
   margin: 0 0 0.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--brand);
 }
 .page-header h1 {
   margin: 0;
 }
 .page-header-desc {
-  margin: 0.4rem 0 0;
-  max-width: var(--measure);
+  margin: 0.375rem 0 0;
+  max-width: 38rem;
   color: var(--muted);
+  font-size: 0.9375rem;
 }
 .page-header-actions {
   display: flex;
@@ -856,7 +1014,7 @@ details[open] > summary .school-switcher-chevron {
 }
 .subnav a[aria-current='page'],
 .subnav a[aria-current='true'] {
-  color: var(--brand-strong);
+  color: var(--text);
   border-bottom-color: var(--brand);
 }
 
@@ -868,7 +1026,6 @@ details[open] > summary .school-switcher-chevron {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem;
-  box-shadow: var(--shadow);
 }
 .card-pad-none {
   padding: 0;
@@ -877,7 +1034,12 @@ details[open] > summary .school-switcher-chevron {
   padding: 0.75rem;
 }
 .card-pad-lg {
-  padding: 1.5rem;
+  padding: 1.25rem;
+}
+@media (min-width: 48rem) {
+  .card-pad-lg {
+    padding: 1.5rem;
+  }
 }
 .card-muted {
   background: var(--surface-2);
@@ -920,7 +1082,7 @@ details[open] > summary .school-switcher-chevron {
   border-radius: var(--radius);
 }
 .card-link:hover .card {
-  border-color: var(--brand);
+  border-color: var(--text);
 }
 
 /* Item card: fixed-aspect thumb with explicit dimensions (no layout shift). */
@@ -956,36 +1118,37 @@ details[open] > summary .school-switcher-chevron {
 }
 .item-card-category {
   position: absolute;
-  left: 0.5rem;
-  top: 0.5rem;
+  left: 0;
+  bottom: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  max-width: calc(100% - 1rem);
-  padding: 0.2rem 0.55rem 0.2rem 0.4rem;
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text);
+  max-width: 100%;
+  padding: 0.25rem 0.6rem 0.25rem 0.5rem;
+  border-radius: 0 var(--radius-sm) 0 0;
+  background: var(--ink);
+  color: var(--ink-text);
   font-size: var(--text-xs);
   font-weight: 700;
-  box-shadow: var(--shadow-sm);
 }
 .item-card-category svg {
   width: 14px;
   height: 14px;
-  color: var(--brand);
+  color: currentColor;
 }
 .item-card .body {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.65rem 0.8rem 0.8rem;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem 0.7rem;
   flex: 1;
 }
 .item-card .desc {
   margin: 0;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
+  font-variation-settings: normal;
+  font-stretch: normal;
   line-height: var(--leading-snug);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1004,8 +1167,7 @@ details[open] > summary .school-switcher-chevron {
   z-index: 1;
 }
 .item-card:has(.item-card-link):hover {
-  border-color: var(--brand);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--text);
 }
 .item-card:has(.item-card-link):hover .item-card-link {
   text-decoration: underline;
@@ -1016,7 +1178,7 @@ details[open] > summary .school-switcher-chevron {
 }
 .item-card:has(.item-card-link:focus-visible) {
   border-color: var(--focus);
-  box-shadow: 0 0 0 1px var(--focus), var(--shadow-lg);
+  box-shadow: 0 0 0 1px var(--focus);
 }
 .item-card-meta {
   display: grid;
@@ -1044,12 +1206,11 @@ details[open] > summary .school-switcher-chevron {
   font-weight: 600;
 }
 .item-card-id {
-  margin-top: auto;
-  padding-top: 0.25rem;
+  margin: auto 0 0;
+  padding-top: 0.2rem;
   font-family: var(--mono);
   font-size: var(--text-xs);
   color: var(--muted);
-  letter-spacing: 0.02em;
 }
 .item-card-status {
   position: relative;
@@ -1097,9 +1258,8 @@ details[open] > summary .school-switcher-chevron {
     height: 14px;
   }
   .item-card-category {
-    left: 0.35rem;
-    top: 0.35rem;
     font-size: 0.6875rem;
+    padding: 0.2rem 0.5rem 0.2rem 0.4rem;
   }
 }
 
@@ -1116,7 +1276,7 @@ details[open] > summary .school-switcher-chevron {
   padding: 0.5rem 1rem;
   min-height: var(--control-h);
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
@@ -1132,7 +1292,7 @@ details[open] > summary .school-switcher-chevron {
     color var(--dur-fast) var(--ease);
 }
 .btn:hover {
-  border-color: var(--brand);
+  border-color: var(--text);
   background: var(--surface-2);
 }
 .btn:active {
@@ -1511,12 +1671,12 @@ details[open] > summary .school-switcher-chevron {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.6rem;
+  gap: 0.5rem;
   width: 100%;
   height: 100%;
-  min-height: 6.25rem;
-  padding: 0.9rem;
-  border: 1px solid var(--border-strong);
+  min-height: 5.5rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
@@ -1529,15 +1689,14 @@ details[open] > summary .school-switcher-chevron {
   transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
 }
 .tile:hover {
-  border-color: var(--brand);
-  background: var(--surface-2);
+  border-color: var(--text);
 }
 .tile-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
   background: var(--brand-soft);
   color: var(--brand);
 }
@@ -1584,8 +1743,38 @@ details[open] > summary .school-switcher-chevron {
   outline-offset: 2px;
 }
 .tile-tone-accent .tile-icon {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--ink);
+  color: var(--ink-text);
+}
+/* Phones: three across, icon over label, so a whole category step fits on one screen. The hint
+   stays in the accessible name but is not shown. */
+@media (max-width: 40rem) {
+  .tile-grid {
+    gap: 0.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .tile-grid .tile {
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.4rem;
+    min-height: 5.75rem;
+    padding: 0.7rem 0.35rem 0.6rem;
+    text-align: center;
+    font-size: 0.875rem;
+    line-height: 1.2;
+  }
+  .tile-grid .tile br {
+    display: none;
+  }
+  .tile-grid .tile-desc {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* ========================================================================
@@ -1733,10 +1922,10 @@ button.chip-sm {
 .notice {
   border-radius: var(--radius-md);
   padding: 0.8rem 1rem;
-  background: var(--brand-soft);
+  background: var(--info-soft);
   color: var(--text);
   border: 1px solid transparent;
-  border-left: 4px solid var(--brand);
+  border-left: 4px solid var(--info);
 }
 .notice > :last-child,
 .notice-body > :last-child {
@@ -1768,7 +1957,7 @@ button.chip-sm {
   width: 22px;
   height: 22px;
   margin-top: 0.05rem;
-  color: var(--brand);
+  color: var(--info);
 }
 .notice-info .notice-icon {
   color: var(--info);
@@ -1915,6 +2104,41 @@ button.chip-sm {
   aspect-ratio: 4 / 3;
   border: 1px solid var(--border);
   background: var(--surface-2);
+}
+/* Phones: a shorter photo so the details and the Approve button come into view sooner. */
+@media (max-width: 40rem) {
+  .photo-slot.review-photo {
+    aspect-ratio: 16 / 10;
+  }
+}
+/* Label-over-value pairs, two to a row where they fit; long values take the full row. */
+.kv-pairs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(9.5rem, 100%), 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+  align-content: start;
+}
+.kv-pairs > div {
+  min-width: 0;
+}
+.kv-pairs .kv-pair-wide {
+  grid-column: 1 / -1;
+}
+.kv-pairs dt {
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+}
+.kv-pairs dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Keycaps inside buttons are for keyboards; touch screens get shorter buttons without them. */
+@media (pointer: coarse) and (max-width: 64rem) {
+  .btn .kbd {
+    display: none;
+  }
 }
 .inline-field {
   min-width: min(14rem, 100%);
@@ -2817,5 +3041,112 @@ button.chip-sm {
   .map-marker,
   .logo-mark {
     forced-color-adjust: none;
+  }
+}
+
+/* ========================================================================
+   32. Screen-fit layouts: each main screen fits a phone or laptop screen
+   with as little scrolling as the content allows.
+   ======================================================================== */
+
+/* Student home: the two main actions side by side, even on a phone. */
+.home-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+@media (min-width: 48rem) {
+  .home-actions {
+    gap: 0.75rem;
+    max-width: 40rem;
+  }
+}
+/* Phones: icon over label, so "Found something" and "I lost something" each stay on one line. */
+@media (max-width: 30rem) {
+  .home-actions .btn {
+    flex-direction: column;
+    gap: 0.25rem;
+    min-height: 4.25rem;
+    padding: 0.6rem 0.5rem;
+    font-size: 1rem;
+  }
+}
+@media (min-width: 48rem) {
+  .home-search {
+    max-width: 40rem;
+  }
+}
+
+/* Item page: title, then photo, then details on phones; photo beside title and details on wide
+   screens, so the whole listing and how to claim it fit one screen. */
+.listing {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'head' 'media' 'details';
+  max-width: 68rem;
+}
+.listing-head {
+  grid-area: head;
+  margin: 0;
+}
+.listing-media {
+  grid-area: media;
+}
+.listing-details {
+  grid-area: details;
+}
+@media (min-width: 56rem) {
+  .listing {
+    column-gap: 2rem;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: 'media head' 'media details';
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+  .listing-media {
+    position: sticky;
+    top: 1rem;
+  }
+  .listing-media .listing-photo {
+    max-height: calc(100vh - 8rem);
+    object-fit: contain;
+  }
+}
+
+/* Staff post form: details on the left, the map on the right on wide screens. */
+.post-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 64rem) {
+  .post-grid:not(.post-grid-single) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    align-items: start;
+  }
+}
+.post-grid-single {
+  max-width: 40rem;
+}
+.post-main .photo-slots {
+  max-width: 24rem;
+}
+.photo-slot {
+  border-width: 1px;
+}
+
+/* Wide screens: student pages read at a comfortable width; staff pages use the full row. */
+@media (min-width: 64rem) {
+  .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+/* Keyboard shortcut hints are for desks with keyboards; touch screens get the buttons alone. */
+@media (pointer: coarse) and (max-width: 64rem) {
+  .keyboard-hint {
+    display: none;
   }
 }

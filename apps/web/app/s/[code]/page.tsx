@@ -85,9 +85,9 @@ export default async function SchoolHome({ params, searchParams }: Props) {
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Lost and found" description={`Things found at ${school.name}. Staff check every post before it shows here.`} />
+      <PageHeader className="home-head" title="Lost and found" description={`Found something at ${school.name}? Post it. Lost something? Look here first. Staff check every post before it shows.`} />
 
-      <form role="search" action={`/s/${code}/search`} method="get" className="search-bar">
+      <form role="search" action={`/s/${code}/search`} method="get" className="search-bar home-search">
         <label htmlFor="home-q" className="visually-hidden">
           Search found items
         </label>
@@ -108,7 +108,7 @@ export default async function SchoolHome({ params, searchParams }: Props) {
         </Button>
       </form>
 
-      <div className="grid-wide">
+      <div className="home-actions">
         <LinkButton variant="primary" size="lg" block icon={<IconCamera />} href={`/s/${code}/found${src ? `?src=${src}` : ''}`} prefetch={false}>
           Found something
         </LinkButton>
