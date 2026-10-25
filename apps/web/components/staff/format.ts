@@ -1,5 +1,6 @@
 // Labels and formatting for the staff UI. Pure: safe in server and client components.
 // Dates are formatted in the school's timezone so server and client render identical text.
+import { districtOr } from '../../lib/features.ts';
 import type { Category, Custody, PublicationStatus, ReviewStatus, StaffRole } from '@recover/shared/dto.ts';
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -49,7 +50,8 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   reviewer: 'Reviewer',
   office: 'Office',
   school_admin: 'School admin',
-  district_admin: 'District admin',
+  // Pilot (lib/features.ts): the district_admin account is the Recover admin.
+  district_admin: districtOr('District admin', 'Recover admin'),
 };
 
 export function label(map: Record<string, string>, v: string | null | undefined): string {
